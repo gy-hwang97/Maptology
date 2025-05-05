@@ -4,6 +4,6 @@ import streamlit as st
 def render_header():
     col1, col2 = st.columns([1, 10])
     with col1:
-        st.image("D:/maptology.png", width=200)  # 경로 슬래시 방향 수정
+        st.image("maptology.png", width=200)  # 경로 슬래시 방향 수정
     with col2:
         st.title('Maptology')
