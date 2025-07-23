@@ -35,8 +35,11 @@ def initialize_session():
     if 'selected_unique_value' not in st.session_state:
         st.session_state.selected_unique_value = None
         
+    # 기존 단일 value_term_indices 대신 값별로 저장
     if 'value_term_indices' not in st.session_state:
         st.session_state.value_term_indices = []
+    if 'value_term_indices_by_value' not in st.session_state:
+        st.session_state.value_term_indices_by_value = {}
     
     if 'value_term_index' not in st.session_state:
         st.session_state.value_term_index = None
