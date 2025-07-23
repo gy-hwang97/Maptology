@@ -65,28 +65,42 @@ def render_value_mapping_section():
                         st.write(f"Select one or more terms that match '{selected_value}':")
                         df_results = st.session_state.value_ontology_results
                         
-                        # 체크박스로 다중 선택 지원
+                        # 체크박스로 다중 선택 지원 (수정된 로직)
                         for i in range(len(df_results)):
-                            # 이전에 선택되었는지 확인 (기본값은 False)
+                            # 현재 값에 대해 이전에 선택되었는지 확인
                             is_checked = i in st.session_state.value_term_indices
                             
                             # 체크박스 생성
                             term_label = f"{df_results.iloc[i]['Preferred Label']} ({df_results.iloc[i]['Ontology Name']})"
+                            
+                            # 체크박스 고유 키 생성 (값별로 구분)
+                            checkbox_key = f"val_cb_{selected_value}_{i}"
+                            
                             if st.checkbox(
                                 term_label,
                                 value=is_checked,
-                                key=f"val_cb_{i}",
+                                key=checkbox_key,
                                 on_change=on_value_checkbox_change
                             ):
-                                # 체크박스가 변경되면 자동으로 인덱스 업데이트
+                                # 체크박스가 선택되면 인덱스 추가
                                 if i not in st.session_state.value_term_indices:
                                     st.session_state.value_term_indices.append(i)
+                                    # 값별 인덱스 저장소에도 업데이트
+                                    column_key = st.session_state.selected_column
+                                    if column_key not in st.session_state.value_term_indices_by_value:
+                                        st.session_state.value_term_indices_by_value[column_key] = {}
+                                    st.session_state.value_term_indices_by_value[column_key][selected_value] = st.session_state.value_term_indices.copy()
                                     # 자동 매핑 적용
                                     handle_value_multiple_mapping(st.session_state.value_term_indices)
                             else:
                                 # 체크 해제되면 인덱스에서 제거
                                 if i in st.session_state.value_term_indices:
                                     st.session_state.value_term_indices.remove(i)
+                                    # 값별 인덱스 저장소에도 업데이트
+                                    column_key = st.session_state.selected_column
+                                    if column_key not in st.session_state.value_term_indices_by_value:
+                                        st.session_state.value_term_indices_by_value[column_key] = {}
+                                    st.session_state.value_term_indices_by_value[column_key][selected_value] = st.session_state.value_term_indices.copy()
                                     # 자동 매핑 적용
                                     handle_value_multiple_mapping(st.session_state.value_term_indices)
                 
@@ -126,7 +140,14 @@ def render_value_mapping_section():
                 value_search_term = st.text_input("Enter search term for value mapping", key="manual_value_search")
                 if st.button("Search All Ontologies", key="btn_value_search"):
                     if value_search_term:
-                        # 버튼 클릭시 먼저 선택 인덱스 초기화
+                        # 현재 값의 선택사항을 저장 (검색 전에)
+                        if st.session_state.selected_unique_value and st.session_state.value_term_indices:
+                            column_key = st.session_state.selected_column
+                            if column_key not in st.session_state.value_term_indices_by_value:
+                                st.session_state.value_term_indices_by_value[column_key] = {}
+                            st.session_state.value_term_indices_by_value[column_key][st.session_state.selected_unique_value] = st.session_state.value_term_indices.copy()
+                        
+                        # 버튼 클릭시 선택 인덱스 초기화 (새로운 검색이므로)
                         st.session_state.value_term_indices = []
                         
                         # Loading 메시지와 함께 모든 온톨로지에서 검색
