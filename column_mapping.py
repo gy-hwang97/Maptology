@@ -1,7 +1,9 @@
 import streamlit as st
 import urllib.parse
+import time
 from ontology import search_ontology, search_bioportal_all_columns, get_ontology_details
 from mapping import on_column_select, on_column_checkbox_change, handle_multiple_mapping
+from loading_overlay import show_loading_overlay
 
 # 컬럼 선택 및 온톨로지 매핑 섹션 렌더링
 def render_column_mapping_section():
@@ -16,9 +18,15 @@ def render_column_mapping_section():
             st.session_state.selected_column = first_column
             st.session_state.column_select = first_column
             
-            # Loading 메시지와 함께 검색 실행
-            with st.spinner("Loading ontology terms for the first column..."):
-                search_ontology(first_column)
+            # 로딩 오버레이와 함께 검색 실행
+            loading_container = st.empty()
+            with loading_container:
+                show_loading_overlay(f"Loading ontology terms for column '{first_column}'...")
+            
+            time.sleep(1)  # 로딩 화면을 보기 위한 지연
+            search_ontology(first_column)
+            loading_container.empty()
+            
             st.session_state.first_load = False
         
         selected_column = st.selectbox(
@@ -136,10 +144,17 @@ def render_column_mapping_section():
                     # 현재 선택된 항목은 새 검색을 위해 초기화
                     st.session_state.selected_terms = []
                     
-                    # Loading 메시지와 함께 검색 실행
-                    with st.spinner(f"Searching BioPortal for '{column_search_term}'... Please wait."):
-                        # 선택된 온톨로지에서만 검색
-                        search_success = search_bioportal_all_columns(column_search_term)
+                    # 로딩 오버레이와 함께 검색 실행
+                    loading_container = st.empty()
+                    with loading_container:
+                        show_loading_overlay(f"Searching BioPortal for '{column_search_term}'...")
+                    
+                    time.sleep(1.5)  # 로딩 화면을 보기 위한 지연
+                    
+                    # 선택된 온톨로지에서만 검색
+                    search_success = search_bioportal_all_columns(column_search_term)
+                    
+                    loading_container.empty()
                         
                     if search_success:
                         st.success(f"✅ Search results found for '{column_search_term}' in BioPortal.")
