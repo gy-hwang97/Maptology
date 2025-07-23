@@ -1,7 +1,9 @@
 import streamlit as st
 import urllib.parse
+import time
 from ontology import search_ontology_for_value, search_bioportal_all, get_ontology_details
 from mapping import on_value_select, on_value_checkbox_change, handle_value_multiple_mapping
+from loading_overlay import show_loading_overlay
 
 # 값 매핑 섹션 렌더링
 def render_value_mapping_section():
@@ -33,9 +35,15 @@ def render_value_mapping_section():
                 default_value = value_options[0] if value_options else None
                 st.session_state.selected_unique_value = default_value
                 if default_value and st.session_state.selected_ontologies:
-                    # 초기 로딩 시 Loading 메시지 표시
-                    with st.spinner(f"Loading ontology terms for value '{default_value}'..."):
-                        search_ontology_for_value(default_value)
+                    # 초기 로딩 시 로딩 오버레이 표시
+                    loading_container = st.empty()
+                    with loading_container:
+                        show_loading_overlay(f"Loading ontology terms for value '{default_value}'...")
+                    
+                    time.sleep(1)  # 로딩 화면을 보기 위한 지연
+                    search_ontology_for_value(default_value)
+                    loading_container.empty()
+                    
                     st.session_state.auto_searched = True
             
             # 현재 선택된 값 인덱스 계산
@@ -150,9 +158,14 @@ def render_value_mapping_section():
                         # 버튼 클릭시 선택 인덱스 초기화 (새로운 검색이므로)
                         st.session_state.value_term_indices = []
                         
-                        # Loading 메시지와 함께 모든 온톨로지에서 검색
-                        with st.spinner(f"Searching BioPortal for '{value_search_term}'... Please wait."):
-                            search_success = search_bioportal_all(value_search_term)
+                        # 로딩 오버레이와 함께 모든 온톨로지에서 검색
+                        loading_container = st.empty()
+                        with loading_container:
+                            show_loading_overlay(f"Searching BioPortal for '{value_search_term}'...")
+                        
+                        time.sleep(1.5)  # 로딩 화면을 보기 위한 지연
+                        search_success = search_bioportal_all(value_search_term)
+                        loading_container.empty()
                             
                         if search_success:
                             st.success(f"✅ Search results found for '{value_search_term}' in BioPortal.")
