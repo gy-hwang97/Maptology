@@ -57,12 +57,8 @@ def handle_multiple_mapping(selected_term_uris, search_term=None):
         "selected_terms": selected_term_uris,
         "mapping_info": mappings
     }
-    # 주석 처리된 선택된 용어 목록 표시 메시지는 그대로 두었습니다.
-    # preferred_labels = [row["Preferred Label"] for row in df_results.itertuples() if row._asdict().get("Ontology Term URI") in selected_term_uris]
-    # terms_str = ", ".join(preferred_labels)
-    # st.success(f"'{selected_column}' mapped to {len(selected_term_uris)} terms: {terms_str}")
-    
-# 값-온톨로지 다중 매핑을 처리하는 콜백 함수 (변경 없음)
+
+# 값-온톨로지 다중 매핑을 처리하는 콜백 함수 (수정됨)
 def handle_value_multiple_mapping(selected_indices):
     if not selected_indices or st.session_state.value_ontology_results is None:
         return
@@ -194,14 +190,33 @@ def on_column_select():
                     search_ontology_for_value(default_value)
                     st.session_state.auto_searched = True
 
-# 값 선택 콜백 함수 (변경 없음)
+# 값 선택 콜백 함수 (수정됨 - 버그 수정)
 def on_value_select():
     selected_value = st.session_state.value_select
+    previous_value = st.session_state.selected_unique_value
+    
+    # 이전 값의 선택사항을 저장
+    if previous_value and st.session_state.value_term_indices:
+        column_key = st.session_state.selected_column
+        if column_key not in st.session_state.value_term_indices_by_value:
+            st.session_state.value_term_indices_by_value[column_key] = {}
+        st.session_state.value_term_indices_by_value[column_key][previous_value] = st.session_state.value_term_indices.copy()
+    
+    # 새 값으로 업데이트
     st.session_state.selected_unique_value = selected_value
+    
+    # 새 값의 이전 선택사항 복원
+    column_key = st.session_state.selected_column
+    if (column_key in st.session_state.value_term_indices_by_value and 
+        selected_value in st.session_state.value_term_indices_by_value[column_key]):
+        st.session_state.value_term_indices = st.session_state.value_term_indices_by_value[column_key][selected_value].copy()
+    else:
+        st.session_state.value_term_indices = []
+    
+    # 새 값에 대한 검색 실행
     if selected_value:
         from ontology import search_ontology_for_value
         search_ontology_for_value(selected_value)
-        st.session_state.value_term_indices = []
 
 # 타입 변경시 호출되는 콜백 함수 (변경 없음)
 def on_type_change():
@@ -209,6 +224,7 @@ def on_type_change():
     selected_col = st.session_state.selected_column
     from utils import change_column_type
     change_column_type(selected_col, new_type, False, None)
+
 # 개별 용어 매핑 삭제 함수
 def remove_term_mapping(column_name, term_uri):
     if column_name and term_uri:
