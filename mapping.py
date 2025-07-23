@@ -1,6 +1,8 @@
 import streamlit as st
+import time
 from ontology import get_ontology_details
 from utils import get_friendly_dtype
+from loading_overlay import show_loading_overlay
 
 # 다중 매핑을 처리하는 콜백 함수 (인덱스 대신 선택된 용어의 URI 리스트를 인자로 받음)
 def handle_multiple_mapping(selected_term_uris, search_term=None):
@@ -136,7 +138,7 @@ def on_column_checkbox_change():
 def on_value_checkbox_change():
     pass
 
-# 컬럼 선택 시 자동으로 온톨로지 검색 실행하는 콜백
+# 컬럼 선택 시 자동으로 온톨로지 검색 실행하는 콜백 (로딩 오버레이 추가)
 def on_column_select():
     selected_column = st.session_state.column_select
     previous_column = st.session_state.selected_column
@@ -172,9 +174,18 @@ def on_column_select():
     st.session_state.selected_column = selected_column
     st.session_state.current_mapping_done = False
     
-    if selected_column and st.session_state.selected_ontologies:
+    # 컬럼 변경 시 로딩 오버레이와 함께 검색
+    if selected_column and st.session_state.selected_ontologies and selected_column != previous_column:
         from ontology import search_ontology, search_ontology_for_value
+        
+        # 로딩 오버레이 표시
+        loading_container = st.empty()
+        with loading_container:
+            show_loading_overlay(f"Loading ontology terms for column '{selected_column}'...")
+        
+        time.sleep(1)  # 로딩 화면을 보기 위한 지연
         search_ontology(selected_column)
+        loading_container.empty()
         
         if st.session_state.uploaded_df is not None and not st.session_state.auto_searched:
             current_dtype = st.session_state.uploaded_df[selected_column].dtype
@@ -187,7 +198,16 @@ def on_column_select():
                 if len(unique_values) > 0:
                     default_value = unique_values[0]
                     st.session_state.selected_unique_value = default_value
+                    
+                    # 값 검색도 로딩 오버레이와 함께
+                    loading_container = st.empty()
+                    with loading_container:
+                        show_loading_overlay(f"Loading ontology terms for value '{default_value}'...")
+                    
+                    time.sleep(1)
                     search_ontology_for_value(default_value)
+                    loading_container.empty()
+                    
                     st.session_state.auto_searched = True
 
 # 값 선택 콜백 함수 (수정됨 - 버그 수정)
@@ -213,10 +233,17 @@ def on_value_select():
     else:
         st.session_state.value_term_indices = []
     
-    # 새 값에 대한 검색 실행
-    if selected_value:
+    # 새 값에 대한 검색 실행 (로딩 오버레이 추가)
+    if selected_value and selected_value != previous_value:
         from ontology import search_ontology_for_value
+        
+        loading_container = st.empty()
+        with loading_container:
+            show_loading_overlay(f"Loading ontology terms for value '{selected_value}'...")
+        
+        time.sleep(1)
         search_ontology_for_value(selected_value)
+        loading_container.empty()
 
 # 타입 변경시 호출되는 콜백 함수 (변경 없음)
 def on_type_change():
