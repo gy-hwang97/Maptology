@@ -21,14 +21,24 @@ initialize_session()
 # 로고와 제목 표시
 render_header()
 
-# 🔹 1. CSV 파일 업로드
+# 1. CSV 파일 업로드
 uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
 if uploaded_file:
-    # CSV 파일 읽기 및 인덱스를 1부터 시작하도록 설정
-    # 쉼표 주변 공백 처리 - skipinitialspace=True
-    df = pd.read_csv(uploaded_file, skipinitialspace=True)
-    df.index = range(1, len(df) + 1)  # 인덱스를 1부터 시작하도록 재설정
-    st.session_state.uploaded_df = df
+    # Loading 메시지와 함께 CSV 파일 처리
+    with st.spinner("Processing uploaded file... Please wait."):
+        try:
+            # CSV 파일 읽기 및 인덱스를 1부터 시작하도록 설정
+            # 쉼표 주변 공백 처리 - skipinitialspace=True
+            df = pd.read_csv(uploaded_file, skipinitialspace=True)
+            df.index = range(1, len(df) + 1)  # 인덱스를 1부터 시작하도록 재설정
+            st.session_state.uploaded_df = df
+            
+            # 파일 처리 완료 메시지
+            st.success(f"✅ File uploaded successfully! Found {len(df)} rows and {len(df.columns)} columns.")
+            
+        except Exception as e:
+            st.error(f"❌ Error processing file: {str(e)}")
+            st.stop()
     
     st.write("### Uploaded Data Preview")
     
@@ -52,26 +62,34 @@ if uploaded_file:
         # 일반 미리보기 테이블
         st.dataframe(st.session_state.uploaded_df.head(20), use_container_width=True)
     
-    # 🔹 온톨로지 선택 섹션
-    render_ontology_selection(get_available_ontologies())
+    # 온톨로지 선택 섹션
+    with st.spinner("Loading available ontologies... Please wait."):
+        available_ontologies = get_available_ontologies()
+        
+    if available_ontologies:
+        st.success(f"✅ Loaded {len(available_ontologies)} ontologies")
+        render_ontology_selection(available_ontologies)
+    else:
+        st.error("❌ Failed to load ontologies. Please check your internet connection and try again.")
+        st.stop()
     
-    # 🔹 컬럼 선택 및 온톨로지 매핑 섹션
+    # 컬럼 선택 및 온톨로지 매핑 섹션
     if st.session_state.selected_ontologies:
         render_column_mapping_section()
 
-        # 🔹 데이터 타입 감지 및 수정 섹션
+        # 데이터 타입 감지 및 수정 섹션
         if st.session_state.selected_column and st.session_state.uploaded_df is not None:
             render_data_values_section()
 
-        # 🔹 값을 온톨로지 용어에 매핑 섹션
+        # 값을 온톨로지 용어에 매핑 섹션
         if st.session_state.selected_column and st.session_state.uploaded_df is not None:
             render_value_mapping_section()
 
-# 🔹 매핑된 용어 및 삭제 버튼 표시
+# 매핑된 용어 및 삭제 버튼 표시
 if st.session_state.mapped_terms:
     render_mapped_terms()
 
-# 🔹 값-온톨로지 매핑 정보 표시
+# 값-온톨로지 매핑 정보 표시
 if st.session_state.value_ontology_mapping:
     render_value_mappings()
     
