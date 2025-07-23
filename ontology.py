@@ -413,8 +413,16 @@ def search_bioportal_all(search_term):
 
 # 온톨로지 선택 처리 함수 (Select All 버튼용)
 def select_all_ontologies():
-    st.session_state.selected_ontologies = [ont['acronym'] for ont in st.session_state.available_ontologies]
-    st.session_state.ontologies_changed = True
+    # 최대 10개 제한 적용
+    all_ontologies = [ont['acronym'] for ont in st.session_state.available_ontologies]
+    if len(all_ontologies) <= 10:
+        st.session_state.selected_ontologies = all_ontologies
+        st.session_state.ontologies_changed = True
+        st.success(f"Selected all {len(all_ontologies)} ontologies")
+    else:
+        st.session_state.selected_ontologies = all_ontologies[:10]
+        st.session_state.ontologies_changed = True
+        st.warning(f"Selected first 10 ontologies out of {len(all_ontologies)} available (maximum 10 allowed)")
 
 # 온톨로지 선택 해제 함수 (Select None 버튼용)
 def select_none_ontologies():
@@ -425,14 +433,33 @@ def select_none_ontologies():
 def render_ontology_selection(available_ontologies):
     st.markdown('<div class="section-header section-purple">Select Ontologies</div>', unsafe_allow_html=True)
     
-    # Select All / Select None 버튼
-    col1, col2 = st.columns(2)
+    # 현재 선택된 개수 표시
+    current_count = len(st.session_state.selected_ontologies)
+    max_count = 10
+    
+    # 선택 상태 표시
+    col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
         if st.button("Select All", key="btn_select_all"):
             select_all_ontologies()
     with col2:
         if st.button("Select None", key="btn_select_none"):
             select_none_ontologies()
+    with col3:
+        # 선택 개수 표시 (색상 코딩)
+        if current_count >= max_count:
+            st.error(f"🚫 {current_count}/{max_count}")
+        elif current_count >= max_count * 0.8:  # 80% 이상일 때 경고
+            st.warning(f"⚠️ {current_count}/{max_count}")
+        else:
+            st.success(f"✅ {current_count}/{max_count}")
+    
+    # 제한 도달 시 메시지
+    if current_count >= max_count:
+        st.error("⚠️ Maximum 10 ontologies selected. Remove some to select others.")
+    elif current_count >= max_count * 0.8:
+        remaining = max_count - current_count
+        st.warning(f"💡 {remaining} more selections available")
     
     # 검색 필터링 추가
     filter_query = st.text_input("Filter ontologies", placeholder="Type to filter...")
@@ -457,24 +484,36 @@ def render_ontology_selection(available_ontologies):
                 
                 # 체크박스 상태 확인 및 생성
                 is_checked = acronym in st.session_state.selected_ontologies
+                
+                # 최대 선택 제한 확인 (이미 선택된 것은 체크 해제 가능)
+                is_disabled = (current_count >= max_count and not is_checked)
+                
                 checkbox = st.checkbox(
                     f"{acronym} - {name}",
                     value=is_checked,
                     key=f"ont_{acronym}",
-                    help=tooltip
+                    help=tooltip,
+                    disabled=is_disabled
                 )
                 
                 # 체크박스 상태 업데이트
                 if checkbox and acronym not in st.session_state.selected_ontologies:
-                    st.session_state.selected_ontologies.append(acronym)
-                    st.session_state.ontologies_changed = True
+                    if len(st.session_state.selected_ontologies) < max_count:
+                        st.session_state.selected_ontologies.append(acronym)
+                        st.session_state.ontologies_changed = True
+                    else:
+                        st.error(f"Cannot select more than {max_count} ontologies")
                 elif not checkbox and acronym in st.session_state.selected_ontologies:
                     st.session_state.selected_ontologies.remove(acronym)
                     st.session_state.ontologies_changed = True
+                
+                # 비활성화된 체크박스에 대한 설명
+                if is_disabled:
+                    st.caption("🚫 Remove other selections to enable this option")
     
     # 선택된 온톨로지 표시
     if st.session_state.selected_ontologies:
-        st.write(f"**Selected ontologies ({len(st.session_state.selected_ontologies)}):** {', '.join(st.session_state.selected_ontologies)}")
+        st.write(f"**Selected ontologies ({len(st.session_state.selected_ontologies)}/{max_count}):** {', '.join(st.session_state.selected_ontologies)}")
     else:
         st.warning("Please select at least one ontology to proceed.")
     
