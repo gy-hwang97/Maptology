@@ -33,7 +33,9 @@ def render_value_mapping_section():
                 default_value = value_options[0] if value_options else None
                 st.session_state.selected_unique_value = default_value
                 if default_value and st.session_state.selected_ontologies:
-                    search_ontology_for_value(default_value)
+                    # 초기 로딩 시 Loading 메시지 표시
+                    with st.spinner(f"Loading ontology terms for value '{default_value}'..."):
+                        search_ontology_for_value(default_value)
                     st.session_state.auto_searched = True
             
             # 현재 선택된 값 인덱스 계산
@@ -117,6 +119,7 @@ def render_value_mapping_section():
                                 """, unsafe_allow_html=True)
                     else:
                         st.info("No terms selected yet. Check one or more terms from the left panel.")
+                
                 # 값 검색 박스
                 st.markdown('<div class="section-header section-green">Search BioPortal for term:</div>', unsafe_allow_html=True)
                 st.markdown('<div class="search-box">', unsafe_allow_html=True)
@@ -126,13 +129,15 @@ def render_value_mapping_section():
                         # 버튼 클릭시 먼저 선택 인덱스 초기화
                         st.session_state.value_term_indices = []
                         
-                        # 모든 온톨로지에서 검색
-                        search_success = search_bioportal_all(value_search_term)
+                        # Loading 메시지와 함께 모든 온톨로지에서 검색
+                        with st.spinner(f"Searching BioPortal for '{value_search_term}'... Please wait."):
+                            search_success = search_bioportal_all(value_search_term)
+                            
                         if search_success:
-                            st.success(f"Search results for '{value_search_term}' found in BioPortal.")
+                            st.success(f"✅ Search results found for '{value_search_term}' in BioPortal.")
                             st.rerun()  # 결과를 표시하기 위해 페이지 새로고침
                         else:
-                            st.warning(f"No results found for '{value_search_term}' in BioPortal.")
+                            st.warning(f"⚠️ No results found for '{value_search_term}' in BioPortal.")
                     else:
                         st.warning("Please enter a search term.")
                 st.markdown('</div>', unsafe_allow_html=True)
