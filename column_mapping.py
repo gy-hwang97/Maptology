@@ -15,7 +15,10 @@ def render_column_mapping_section():
             first_column = columns[0]
             st.session_state.selected_column = first_column
             st.session_state.column_select = first_column
-            search_ontology(first_column)
+            
+            # Loading 메시지와 함께 검색 실행
+            with st.spinner("Loading ontology terms for the first column..."):
+                search_ontology(first_column)
             st.session_state.first_load = False
         
         selected_column = st.selectbox(
@@ -133,13 +136,16 @@ def render_column_mapping_section():
                     # 현재 선택된 항목은 새 검색을 위해 초기화
                     st.session_state.selected_terms = []
                     
-                    # 선택된 온톨로지에서만 검색
-                    search_success = search_bioportal_all_columns(column_search_term)
+                    # Loading 메시지와 함께 검색 실행
+                    with st.spinner(f"Searching BioPortal for '{column_search_term}'... Please wait."):
+                        # 선택된 온톨로지에서만 검색
+                        search_success = search_bioportal_all_columns(column_search_term)
+                        
                     if search_success:
-                        st.success(f"BioPortal에서 '{column_search_term}'에 대한 검색 결과를 찾았습니다.")
+                        st.success(f"✅ Search results found for '{column_search_term}' in BioPortal.")
                         st.rerun()
                     else:
-                        st.warning(f"BioPortal에서 '{column_search_term}'에 대한 결과를 찾을 수 없습니다.")
+                        st.warning(f"⚠️ No results found for '{column_search_term}' in BioPortal.")
                 else:
-                    st.warning("검색어를 입력해주세요.")
+                    st.warning("Please enter a search term.")
             st.markdown('</div>', unsafe_allow_html=True)
