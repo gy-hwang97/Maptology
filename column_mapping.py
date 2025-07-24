@@ -5,25 +5,25 @@ from ontology import search_ontology, search_bioportal_all_columns, get_ontology
 from mapping import on_column_select, on_column_checkbox_change, handle_multiple_mapping
 from loading_overlay import show_loading_overlay
 
-# 컬럼 선택 및 온톨로지 매핑 섹션 렌더링
+# 컬럼 선택 및 온톨로지 매핑 섹션 렌더링 / Render column selection and ontology mapping section
 def render_column_mapping_section():
     st.markdown('<div class="section-header section-red">Select Ontology Term for Column</div>', unsafe_allow_html=True)
     
     if st.session_state.uploaded_df is not None:
         columns = list(st.session_state.uploaded_df.columns)
         
-        # 파일 첫 로드 시 자동으로 첫 번째 컬럼 선택 및 검색
+        # 파일 첫 로드 시 자동으로 첫 번째 컬럼 선택 및 검색 / Automatically select and search the first column on initial file load
         if st.session_state.first_load and columns:
             first_column = columns[0]
             st.session_state.selected_column = first_column
             st.session_state.column_select = first_column
             
-            # 로딩 오버레이와 함께 검색 실행
+            # 로딩 오버레이와 함께 검색 실행 / Execute search with loading overlay
             loading_container = st.empty()
             with loading_container:
                 show_loading_overlay(f"Loading ontology terms for column '{first_column}'...")
             
-            time.sleep(1)  # 로딩 화면을 보기 위한 지연
+            time.sleep(1)  # 로딩 화면을 보기 위한 지연 / Delay to show loading screen
             search_ontology(first_column)
             loading_container.empty()
             
@@ -39,40 +39,40 @@ def render_column_mapping_section():
         if selected_column:
             st.session_state.selected_column = selected_column
             
-            # 이미 매핑된 컬럼인 경우 해당 정보 불러오기 (이제 고유 식별자를 사용)
+            # 이미 매핑된 컬럼인 경우 해당 정보 불러오기 (이제 고유 식별자를 사용) / Load information for already mapped columns (now using unique identifiers)
             if selected_column in st.session_state.column_mapping:
                 st.session_state.selected_terms = st.session_state.column_mapping[selected_column].get("selected_terms", [])
                 st.session_state.current_mapping_done = True
         
-        # 온톨로지 검색 결과가 있을 때만 선택 UI 표시
+        # 온톨로지 검색 결과가 있을 때만 선택 UI 표시 / Display selection UI only when ontology search results exist
         if st.session_state.filtered_ontology_results is not None and len(st.session_state.filtered_ontology_results) > 0:
             st.write("### Select ontology terms")
             
-            # 라디오 버튼과 정보를 두 열로 표시
+            # 라디오 버튼과 정보를 두 열로 표시 / Display radio buttons and information in two columns
             col1, col2 = st.columns([3, 2])
 
             with col1:
-                # 스크롤 가능한 컨테이너 사용
+                # 스크롤 가능한 컨테이너 사용 / Use scrollable container
                 with st.container(height=300):
                     st.write("Select one or more terms that match your column:")
                     df = st.session_state.filtered_ontology_results
                     
-                    # 체크박스로 다중 선택 지원
+                    # 체크박스로 다중 선택 지원 / Support multiple selection with checkboxes
                     for i in range(len(df)):
-                        # 각 행의 고유 식별자(URI) 추출
+                        # 각 행의 고유 식별자(URI) 추출 / Extract unique identifier (URI) from each row
                         term_uri = df.iloc[i]['Ontology Term URI']
                         
-                        # 현재 검색어 확인 (컬럼 이름 또는 수동 검색어)
+                        # 현재 검색어 확인 (컬럼 이름 또는 수동 검색어) / Check current search term (column name or manual search term)
                         current_search = st.session_state.get('current_search_term', st.session_state.selected_column)
                         
-                        # 이 검색어에 대한 선택 목록이 없으면 초기화
+                        # 이 검색어에 대한 선택 목록이 없으면 초기화 / Initialize selection list if it doesn't exist for this search term
                         if current_search not in st.session_state.search_terms_selections:
                             st.session_state.search_terms_selections[current_search] = []
                         
-                        # 현재 검색어의 선택 목록에서 이 용어가 선택되었는지 확인
+                        # 현재 검색어의 선택 목록에서 이 용어가 선택되었는지 확인 / Check if this term is selected in the current search term's selection list
                         is_checked = term_uri in st.session_state.search_terms_selections[current_search]
                         
-                        # 체크박스 고유 키 생성
+                        # 체크박스 고유 키 생성 / Generate unique key for checkbox
                         unique_key = f"col_cb_{current_search}_{i}"
 
                         term_label = f"{df.iloc[i]['Preferred Label']} ({df.iloc[i]['Ontology Name']})"
@@ -82,14 +82,14 @@ def render_column_mapping_section():
                             key=unique_key,
                             on_change=on_column_checkbox_change
                         ):
-                            # 이 용어를 현재 검색어의 선택 목록과 전체 선택 목록에 추가
+                            # 이 용어를 현재 검색어의 선택 목록과 전체 선택 목록에 추가 / Add this term to current search term's selection list and overall selection list
                             if term_uri not in st.session_state.search_terms_selections[current_search]:
                                 st.session_state.search_terms_selections[current_search].append(term_uri)
                             if term_uri not in st.session_state.selected_terms:
                                 st.session_state.selected_terms.append(term_uri)
                                 handle_multiple_mapping(st.session_state.selected_terms, current_search)
                         else:
-                            # 이 용어를 현재 검색어의 선택 목록과 전체 선택 목록에서 제거
+                            # 이 용어를 현재 검색어의 선택 목록과 전체 선택 목록에서 제거 / Remove this term from current search term's selection list and overall selection list
                             if term_uri in st.session_state.search_terms_selections[current_search]:
                                 st.session_state.search_terms_selections[current_search].remove(term_uri)
                             if term_uri in st.session_state.selected_terms:
@@ -97,18 +97,16 @@ def render_column_mapping_section():
                                 handle_multiple_mapping(st.session_state.selected_terms, current_search)
             
             with col2:
-                # 선택된 모든 항목 정보 표시 (현재 결과 목록에서 해당 URI에 해당하는 항목 찾기)
+                # 선택된 모든 항목 정보 표시 (현재 결과 목록에서 해당 URI에 해당하는 항목 찾기) / Display information for all selected items (find items with corresponding URI in current result list)
                 if st.session_state.selected_terms:
-                    """st.markdown(f"<div style='font-weight:bold;'>Selected Terms: {len(st.session_state.selected_terms)}</div>", unsafe_allow_html=True)"""
-                    
                     for term_uri in st.session_state.selected_terms:
-                        # 현재 결과(df)에서 해당 URI를 갖는 행을 검색
+                        # 현재 결과(df)에서 해당 URI를 갖는 행을 검색 / Search for rows with corresponding URI in current results (df)
                         matching_rows = df[df['Ontology Term URI'] == term_uri]
                         if not matching_rows.empty:
                             selected_row = matching_rows.iloc[0]
                             ontology_abbr = selected_row['Ontology Name']
                             
-                            # 온톨로지 전체 이름 가져오기
+                            # 온톨로지 전체 이름 가져오기 / Get full ontology name
                             ontology_info = get_ontology_details(ontology_abbr)
                             full_ontology_name = ontology_info['full_name']
                             display_ontology_name = f"{full_ontology_name} ({ontology_abbr})"
@@ -126,32 +124,32 @@ def render_column_mapping_section():
                 else:
                     st.info("No terms selected yet. Check one or more terms from the left panel.")
             
-            # 검색 박스
+            # 검색 박스 / Search box
             st.markdown('<div class="section-header section-green">Search BioPortal for term:</div>', unsafe_allow_html=True)
             st.markdown('<div class="search-box">', unsafe_allow_html=True)
             column_search_term = st.text_input("Enter search term for column mapping", key="manual_column_search")
             if st.button("Search All Ontologies", key="btn_column_search"):
                 if column_search_term:
-                    # 검색어를 세션 상태에 저장
+                    # 검색어를 세션 상태에 저장 / Save search term to session state
                     st.session_state.manual_search_term = column_search_term
                     
-                    # 이 검색어에 대한 별도의 선택 상태 초기화
+                    # 이 검색어에 대한 별도의 선택 상태 초기화 / Initialize separate selection state for this search term
                     st.session_state.search_terms_selections[column_search_term] = []
                     
-                    # 현재 활성화된 검색어를 세션 상태에 저장
+                    # 현재 활성화된 검색어를 세션 상태에 저장 / Save currently active search term to session state
                     st.session_state.current_search_term = column_search_term
                     
-                    # 현재 선택된 항목은 새 검색을 위해 초기화
+                    # 현재 선택된 항목은 새 검색을 위해 초기화 / Initialize currently selected items for new search
                     st.session_state.selected_terms = []
                     
-                    # 로딩 오버레이와 함께 검색 실행
+                    # 로딩 오버레이와 함께 검색 실행 / Execute search with loading overlay
                     loading_container = st.empty()
                     with loading_container:
                         show_loading_overlay(f"Searching BioPortal for '{column_search_term}'...")
                     
-                    time.sleep(1.5)  # 로딩 화면을 보기 위한 지연
+                    time.sleep(1.5)  # 로딩 화면을 보기 위한 지연 / Delay to show loading screen
                     
-                    # 선택된 온톨로지에서만 검색
+                    # 선택된 온톨로지에서만 검색 / Search only in selected ontologies
                     search_success = search_bioportal_all_columns(column_search_term)
                     
                     loading_container.empty()
