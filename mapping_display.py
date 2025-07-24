@@ -6,7 +6,7 @@ import json
 from mapping import remove_mapping, remove_value_mapping
 from schema import generate_linkml_schema
 
-# 매핑된 용어 섹션 렌더링
+# 매핑된 용어 섹션 렌더링 / Render mapped terms section
 def render_mapped_terms():
     st.write("### Mapped Ontology Terms")
     
@@ -22,7 +22,7 @@ def render_mapped_terms():
     
     st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
     
-    # 각 매핑을 개별적으로 표시
+    # 각 매핑을 개별적으로 표시 / Display each mapping individually
     for mapping in st.session_state.mapped_terms:
         column_name = mapping['Original Label']
         data_type = mapping.get('Data Type', 'String')
@@ -62,7 +62,7 @@ def render_mapped_terms():
             """, unsafe_allow_html=True)
         
         with col4:
-            # 각 용어별 삭제 버튼 (고유 키 생성)
+            # 각 용어별 삭제 버튼 (고유 키 생성) / Delete button for each term (generate unique key)
             term_uri = mapping['Ontology Term URI']
             unique_key = f"delete_{column_name}_{term_uri.split('/')[-1]}"
             if st.button("🗑️", key=unique_key):
@@ -71,8 +71,7 @@ def render_mapped_terms():
         
         st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
 
-# 값-온톨로지 매핑 정보 표시
-# mapping_display.py 파일의 render_value_mappings 함수 수정
+# 값-온톨로지 매핑 정보 표시 / Display value-ontology mapping information
 def render_value_mappings():
     st.write("### Unique Values' Ontology Terms")
     
@@ -93,7 +92,7 @@ def render_value_mappings():
     for column in st.session_state.value_ontology_mapping:
         for value, val_mappings in st.session_state.value_ontology_mapping[column].items():
             if isinstance(val_mappings, list):
-                # 각 매핑을 개별 행으로 표시
+                # 각 매핑을 개별 행으로 표시 / Display each mapping as individual row
                 for val_mapping in val_mappings:
                     col1, col2, col3, col4, col5 = st.columns([2, 2, 3, 2, 1])
                     
@@ -118,7 +117,7 @@ def render_value_mappings():
                         """, unsafe_allow_html=True)
                     
                     with col5:
-                        # 각 용어별 삭제 버튼 (고유 키 생성)
+                        # 각 용어별 삭제 버튼 (고유 키 생성) / Delete button for each term (generate unique key)
                         term_uri = val_mapping['Ontology Term URI']
                         unique_key = f"delete_value_{column}_{value}_{term_uri.split('/')[-1]}"
                         if st.button("🗑️", key=unique_key):
@@ -127,7 +126,7 @@ def render_value_mappings():
                     
                     st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
             else:
-                # 이전 버전 호환성을 위한 단일 매핑 처리
+                # 이전 버전 호환성을 위한 단일 매핑 처리 / Single mapping handling for backward compatibility
                 col1, col2, col3, col4, col5 = st.columns([2, 2, 3, 2, 1])
                 
                 with col1:
@@ -151,7 +150,7 @@ def render_value_mappings():
                     """, unsafe_allow_html=True)
                 
                 with col5:
-                    # 각 용어별 삭제 버튼
+                    # 각 용어별 삭제 버튼 / Delete button for each term
                     term_uri = val_mappings['Ontology Term URI']
                     unique_key = f"delete_value_{column}_{value}_{term_uri.split('/')[-1]}"
                     if st.button("🗑️", key=unique_key):
@@ -160,7 +159,7 @@ def render_value_mappings():
                 
                 st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
 
-# 다운로드 버튼 렌더링
+# 다운로드 버튼 렌더링 / Render download buttons
 def render_download_buttons():
     col1, col2, col3, col4 = st.columns(4)
     
