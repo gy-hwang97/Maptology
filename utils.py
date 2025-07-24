@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 
-# API 키 설정
+# API 키 설정 / API key configuration
 API_KEY = "6991b022-b43e-44b3-bf2e-650474fd5794"
 
-# 세션 상태 초기화
+# 세션 상태 초기화 / Initialize session state
 def initialize_session():
     if 'ontology_results' not in st.session_state:
         st.session_state.ontology_results = None
@@ -19,7 +19,7 @@ def initialize_session():
     if 'column_mapping' not in st.session_state:
         st.session_state.column_mapping = {}
     
-    # 기존 selected_term_indices 대신 고유 식별자 리스트 selected_terms 사용
+    # 기존 selected_term_indices 대신 고유 식별자 리스트 selected_terms 사용 / Use unique identifier list selected_terms instead of existing selected_term_indices
     if 'selected_terms' not in st.session_state:
         st.session_state.selected_terms = []
     if 'search_term_indices' not in st.session_state:
@@ -35,7 +35,7 @@ def initialize_session():
     if 'selected_unique_value' not in st.session_state:
         st.session_state.selected_unique_value = None
         
-    # 기존 단일 value_term_indices 대신 값별로 저장
+    # 기존 단일 value_term_indices 대신 값별로 저장 / Store by value instead of existing single value_term_indices
     if 'value_term_indices' not in st.session_state:
         st.session_state.value_term_indices = []
     if 'value_term_indices_by_value' not in st.session_state:
@@ -64,7 +64,7 @@ def initialize_session():
     if 'search_terms_selections' not in st.session_state:
         st.session_state.search_terms_selections = {}
 
-# CSS 스타일 추가 (변경 없음)
+# CSS 스타일 추가 (변경 없음) / Add CSS styles (no changes)
 def add_css():
     st.markdown("""
     <style>
@@ -217,7 +217,7 @@ def add_css():
     </style>
     """, unsafe_allow_html=True)
 
-# pandas 데이터 타입을 사용자 친화적으로 변환하는 함수
+# pandas 데이터 타입을 사용자 친화적으로 변환하는 함수 / Function to convert pandas data types to user-friendly format
 def get_friendly_dtype(dtype):
     dtype_name = str(dtype)
     
@@ -238,7 +238,7 @@ def get_friendly_dtype(dtype):
     else:
         return "String"
 
-# 값 정보 표시 함수 (변경 없음)
+# 값 정보 표시 함수 (변경 없음) / Value information display function (no changes)
 def display_column_info(df, column_name):
     dtype = df[column_name].dtype
     dtype_name = str(dtype)
@@ -269,7 +269,7 @@ def display_column_info(df, column_name):
         st.write("Sample values:")
         st.write(df[column_name].head(5).tolist())
 
-# 데이터 타입 변경 함수 (변경 없음)
+# 데이터 타입 변경 함수 (변경 없음) / Data type change function (no changes)
 def change_column_type(column_name, new_type, handle_missing=False, missing_values=None):
     if column_name and st.session_state.uploaded_df is not None:
         df = st.session_state.uploaded_df
