@@ -411,19 +411,6 @@ def search_bioportal_all(search_term):
         st.error(f"오류: {str(e)}. API 키와 인터넷 연결을 확인하세요.")  # Error: {str(e)}. Check your API key and internet connection
         return False
 
-# 온톨로지 선택 처리 함수 (Select All 버튼용) / Ontology selection handling function (for Select All button)
-def select_all_ontologies():
-    # 최대 10개 제한 적용 / Apply maximum 10 limit
-    all_ontologies = [ont['acronym'] for ont in st.session_state.available_ontologies]
-    if len(all_ontologies) <= 10:
-        st.session_state.selected_ontologies = all_ontologies
-        st.session_state.ontologies_changed = True
-        st.success(f"Selected all {len(all_ontologies)} ontologies")
-    else:
-        st.session_state.selected_ontologies = all_ontologies[:10]
-        st.session_state.ontologies_changed = True
-        st.warning(f"Selected first 10 ontologies out of {len(all_ontologies)} available (maximum 10 allowed)")
-
 # 온톨로지 선택 해제 함수 (Select None 버튼용) / Ontology deselection function (for Select None button)
 def select_none_ontologies():
     st.session_state.selected_ontologies = []
@@ -436,14 +423,9 @@ def render_ontology_selection(available_ontologies):
     # 실시간 업데이트 카운터용 컨테이너 생성 / Create container for real-time update counter
     counter_container = st.empty()
     
-    # 버튼 행 / Button row
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("Select All", key="btn_select_all"):
-            select_all_ontologies()
-    with col2:
-        if st.button("Select None", key="btn_select_none"):
-            select_none_ontologies()
+    # Select None 버튼만 표시 / Show only Select None button
+    if st.button("Select None", key="btn_select_none"):
+        select_none_ontologies()
     
     # 검색 필터링 추가 / Add search filtering
     filter_query = st.text_input("Filter ontologies", placeholder="Type to filter...")
