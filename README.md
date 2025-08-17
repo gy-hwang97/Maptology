@@ -48,9 +48,20 @@ Validate mappings and download your standardized dataset
 
 <h2>Getting Started</h2>
 
+### **Prerequisites**
+Before using Maptology, you need a **free BioPortal API key**:
+
+1. Visit https://bioportal.bioontology.org/
+2. Create a free account  
+3. Go to "Account" → "API Key" to get your key
+4. Copy your API key for use in the app
+
+### **Using the App**
 **Link:** https://maptology.streamlit.app/
 
-Simply visit the app, upload your CSV file, and follow the guided mapping process to transform your data into a standardized format.
+1. Visit the app and enter your BioPortal API key
+2. Upload your CSV file
+3. Follow the guided mapping process to transform your data into a standardized format
 
 ---
 
@@ -63,5 +74,4 @@ Simply visit the app, upload your CSV file, and follow the guided mapping proces
 
 <h2>License</h2>
 
-*## License
-This project is licensed under the MIT License - see the license file for details.*
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
