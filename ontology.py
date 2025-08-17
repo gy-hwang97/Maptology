@@ -2,13 +2,18 @@ import streamlit as st
 import requests
 import pandas as pd
 import urllib.parse
-from utils import API_KEY
+from utils import get_api_key  # API_KEY import 제거, get_api_key 함수 사용
 
 # 사용 가능한 온톨로지 목록 가져오기 / Get list of available ontologies
 def get_available_ontologies():
     if not st.session_state.available_ontologies:
         try:
-            url = f"https://data.bioontology.org/ontologies?apikey={API_KEY}"
+            api_key = get_api_key()
+            if not api_key:
+                st.error("API key not found. Please enter your API key.")
+                return []
+                
+            url = f"https://data.bioontology.org/ontologies?apikey={api_key}"
             response = requests.get(url)
             
             if response.status_code == 200:
@@ -39,8 +44,17 @@ def get_ontology_details(ontology_acronym):
     
     # 캐시에 없으면 API 호출 / Call API if not in cache
     try:
+        api_key = get_api_key()
+        if not api_key:
+            # API 키가 없으면 약어만 반환 / Return only abbreviation if no API key
+            st.session_state.ontology_details_cache[ontology_acronym] = {
+                'full_name': ontology_acronym,
+                'acronym': ontology_acronym
+            }
+            return st.session_state.ontology_details_cache[ontology_acronym]
+            
         # BioPortal API를 통해 온톨로지 정보 요청 / Request ontology information through BioPortal API
-        url = f"https://data.bioontology.org/ontologies/{ontology_acronym}?apikey={API_KEY}"
+        url = f"https://data.bioontology.org/ontologies/{ontology_acronym}?apikey={api_key}"
         response = requests.get(url)
         
         if response.status_code == 200:
@@ -80,7 +94,10 @@ def search_ontology(selected_column):
         st.session_state.filtered_ontology_results = None
         return
         
-    api_key = API_KEY
+    api_key = get_api_key()
+    if not api_key:
+        st.error("API key not found. Please enter your API key.")
+        return
     
     # 쉼표 주변 공백 제거 - 검색어 전처리 / Remove spaces around commas - search term preprocessing
     search_term = selected_column.strip()
@@ -100,7 +117,7 @@ def search_ontology(selected_column):
             if results:
                 ontology_data = []
                 for res in results:
-                    # Preferred Label와 Definition 값이 없는 경우는 결과에서 제외 / Exclude results without Preferred Label and Definition values
+                    # Preferred Label과 Definition 값이 없는 경우는 결과에서 제외 / Exclude results without Preferred Label and Definition values
                     pref_label = res.get("prefLabel")
                     definition = res.get("definition", [None])[0] if res.get("definition") else None
                     if not pref_label or pref_label == "N/A":
@@ -162,7 +179,10 @@ def search_ontology_for_value(selected_value):
         st.session_state.value_ontology_results = None
         return
         
-    api_key = API_KEY
+    api_key = get_api_key()
+    if not api_key:
+        st.error("API key not found. Please enter your API key.")
+        return
     
     # 쉼표 주변 공백 제거 - 검색어 전처리 / Remove spaces around commas - search term preprocessing
     search_term = str(selected_value).strip()
@@ -182,7 +202,7 @@ def search_ontology_for_value(selected_value):
             if results:
                 ontology_data = []
                 for res in results:
-                    # Preferred Label와 Definition 값이 없는 경우는 결과에서 제외 / Exclude results without Preferred Label and Definition values
+                    # Preferred Label과 Definition 값이 없는 경우는 결과에서 제외 / Exclude results without Preferred Label and Definition values
                     pref_label = res.get("prefLabel")
                     definition = res.get("definition", [None])[0] if res.get("definition") else None
                     if not pref_label or pref_label == "N/A":
@@ -233,7 +253,10 @@ def search_bioportal_all_columns(search_term):
         st.warning("온톨로지를 하나 이상 선택해주세요.")  # Please select at least one ontology
         return False
         
-    api_key = API_KEY
+    api_key = get_api_key()
+    if not api_key:
+        st.error("API key not found. Please enter your API key.")
+        return False
     
     # 쉼표 주변 공백 제거 - 검색어 전처리 / Remove spaces around commas - search term preprocessing
     search_term = str(search_term).strip()
@@ -327,7 +350,10 @@ def search_bioportal_all(search_term):
         st.warning("온톨로지를 하나 이상 선택해주세요.")  # Please select at least one ontology
         return False
         
-    api_key = API_KEY
+    api_key = get_api_key()
+    if not api_key:
+        st.error("API key not found. Please enter your API key.")
+        return False
     
     # 쉼표 주변 공백 제거 - 검색어 전처리 / Remove spaces around commas - search term preprocessing
     search_term = str(search_term).strip()
