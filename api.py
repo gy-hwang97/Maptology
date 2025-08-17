@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import urllib.parse
 import pandas as pd
-from utils import API_KEY
+from utils import get_api_key  # API_KEY import 제거, get_api_key 함수 사용
 
 # 수동 검색 함수 - 선택된 온톨로지 내에서만 검색
 def manual_search_ontology(search_term):
@@ -14,7 +14,10 @@ def manual_search_ontology(search_term):
         st.warning("Please select at least one ontology first.")
         return False
         
-    api_key = API_KEY
+    api_key = get_api_key()
+    if not api_key:
+        st.error("API key not found. Please enter your API key.")
+        return False
     
     # 쉼표 주변 공백 제거 - 검색어 전처리
     search_term = search_term.strip()
@@ -100,7 +103,10 @@ def manual_search_value(search_term):
         st.warning("Please select at least one ontology first.")
         return False
         
-    api_key = API_KEY
+    api_key = get_api_key()
+    if not api_key:
+        st.error("API key not found. Please enter your API key.")
+        return False
     
     # 쉼표 주변 공백 제거 - 검색어 전처리
     search_term = str(search_term).strip()
