@@ -63,4 +63,5 @@ Simply visit the app, upload your CSV file, and follow the guided mapping proces
 
 <h2>License</h2>
 
-*## License © 2025 Gilyeon Hwang. All rights reserved.*
+*## License
+This project is licensed under the MIT License - see the license file for details.*
