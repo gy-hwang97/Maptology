@@ -1,11 +1,15 @@
 import streamlit as st
 import pandas as pd
 
-# API 키 설정 / API key configuration
-API_KEY = "6991b022-b43e-44b3-bf2e-650474fd5794"
+# API 키를 빈 문자열로 설정 (더 이상 하드코딩하지 않음)
+API_KEY = ""
 
 # 세션 상태 초기화 / Initialize session state
 def initialize_session():
+    # API 키 세션 스테이트 추가
+    if 'api_key' not in st.session_state:
+        st.session_state.api_key = None
+        
     if 'ontology_results' not in st.session_state:
         st.session_state.ontology_results = None
     if 'uploaded_df' not in st.session_state:
@@ -63,6 +67,11 @@ def initialize_session():
         st.session_state.ontologies_changed = False
     if 'search_terms_selections' not in st.session_state:
         st.session_state.search_terms_selections = {}
+
+# API 키 가져오기 함수 추가
+def get_api_key():
+    """세션 스테이트에서 API 키를 가져오는 함수"""
+    return st.session_state.get('api_key', None)
 
 # CSS 스타일 추가 (변경 없음) / Add CSS styles (no changes)
 def add_css():
