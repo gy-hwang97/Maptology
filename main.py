@@ -23,6 +23,61 @@ initialize_session()
 # 로고와 제목 표시 / Display logo and title
 render_header()
 
+# =============================================================================
+# API 키 입력 섹션 / API Key Input Section
+# =============================================================================
+if not st.session_state.get('api_key'):
+    st.markdown("### BioPortal API Key Required")
+    st.markdown("Before using Maptology, you need a **free BioPortal API key**:")
+    
+    with st.expander("How to get your API key", expanded=False):
+        st.markdown("""
+        1. Visit **https://bioportal.bioontology.org/**
+        2. Click **"Login"** or **"Register"** to create a free account
+        3. After logging in, go to **"Account" → "API Key"**
+        4. Copy your API key and paste it below
+        """)
+    
+    api_key = st.text_input(
+        "Enter your BioPortal API Key:", 
+        type="password",
+        placeholder="Paste your API key here...",
+        help="Get your free API key at https://bioportal.bioontology.org/"
+    )
+    
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("Start Using Maptology", type="primary"):
+            if api_key and len(api_key.strip()) > 10:  # 기본적인 validation
+                st.session_state.api_key = api_key.strip()
+                st.success("✅ API key saved! Loading application...")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("❌ Please enter a valid API key")
+    
+    with col2:
+        if api_key:
+            if len(api_key.strip()) < 10:
+                st.warning("API key seems too short. Please check your key.")
+    
+    if not api_key:
+        st.info("**Need an API key?** Register for free at https://bioportal.bioontology.org/")
+        st.warning("Please enter your BioPortal API key to continue")
+        
+    st.stop()  # 앱 실행 중단
+
+# =============================================================================
+# 메인 앱 시작 (API 키가 있을 때만) / Main App Start (only when API key exists)
+# =============================================================================
+
+# API 키 상태 표시 (작은 표시기)
+with st.sidebar:
+    st.success("API Key: Active")
+    if st.button("Change API Key"):
+        st.session_state.api_key = None
+        st.rerun()
+
 # CSV 파일 업로드 / CSV file upload
 uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
 if uploaded_file:
@@ -93,7 +148,7 @@ if uploaded_file:
         st.success(f"✅ Loaded {len(available_ontologies)} ontologies")
         render_ontology_selection(available_ontologies)
     else:
-        st.error("❌ Failed to load ontologies. Please check your internet connection and try again.")
+        st.error("❌ Failed to load ontologies. Please check your internet connection and API key.")
         st.stop()
     
     # 컬럼 선택 및 온톨로지 매핑 섹션 / Column selection and ontology mapping section
@@ -119,6 +174,6 @@ if st.session_state.value_ontology_mapping:
     # 다운로드 버튼 / Download buttons
     render_download_buttons()
 
-# API 라이센스 관련 경고 / API license related warning
+# 하단 정보 제거 (교수님 피드백 반영) / Remove bottom warning (professor feedback applied)
 st.write("---")
-st.warning("Please ensure you have proper licensing for using the BioPortal API. [Learn more about BioPortal licensing](https://bioportal.bioontology.org/license)")
+st.caption("Maptology uses the BioPortal API to search and map ontology terms.")
