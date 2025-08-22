@@ -82,7 +82,7 @@ with st.sidebar:
         st.rerun()
 
 # CSV 파일 업로드 / CSV file upload
-uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
+uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls"])
 if uploaded_file:
     # 로딩 오버레이와 함께 CSV 파일 처리 / Process CSV file with loading overlay
     loading_container = st.empty()
@@ -180,4 +180,5 @@ if st.session_state.value_ontology_mapping:
 # 하단 정보 제거 (교수님 피드백 반영) / Remove bottom warning (professor feedback applied)
 st.write("---")
 st.caption("Maptology uses the BioPortal API to search and map ontology terms.")
+
 
