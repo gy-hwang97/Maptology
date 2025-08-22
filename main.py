@@ -121,7 +121,8 @@ if uploaded_file:
         st.error(f"❌ Error processing file: {str(e)}")
         st.stop()
     
-    st.write("### Uploaded Data Preview")
+    st.write("### Preview Data")
+    st.caption("This table shows the first 20 lines of your data so you can verify that the data were parsed properly.")
     
     # 하이라이트된 컬럼이 있으면 스타일링 적용 / Apply styling if there's a highlighted column
     if 'highlighted_column' in st.session_state and st.session_state.highlighted_column in df.columns:
@@ -159,6 +160,10 @@ if uploaded_file:
         
     if available_ontologies:
         st.success(f"✅ Loaded {len(available_ontologies)} ontologies")
+        
+        st.write("### Select Ontologies")
+        st.caption("We have just retrieved ontologies from BioPortal. The next step is to select one or more of these ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
+        
         render_ontology_selection(available_ontologies)
     else:
         st.error("❌ Failed to load ontologies. Please check your internet connection and API key.")
