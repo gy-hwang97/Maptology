@@ -223,6 +223,11 @@ def add_css():
     .section-green {
     border-left: 5px solid #4CAF50;
     }
+    
+    /* 파일 업로더의 X 버튼 숨기기 */
+    .stFileUploader button[kind="icon"] {
+        display: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
