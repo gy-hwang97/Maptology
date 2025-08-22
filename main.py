@@ -94,9 +94,19 @@ if uploaded_file:
         # 인위적인 지연 추가 (로딩 화면을 보기 위해) / Add artificial delay to show loading screen
         time.sleep(1)
         
-        # CSV 파일 읽기 및 인덱스를 1부터 시작하도록 설정 / Read CSV file and set index to start from 1
-        # 쉼표 주변 공백 처리 - skipinitialspace=True / Handle spaces around commas - skipinitialspace=True
-        df = pd.read_csv(uploaded_file, skipinitialspace=True)
+        # 파일 형식에 따라 읽기 / Read file based on format
+        file_name = uploaded_file.name.lower()
+        
+        if file_name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file, skipinitialspace=True)
+        elif file_name.endswith('.tsv'):
+            df = pd.read_csv(uploaded_file, sep='\t', skipinitialspace=True)
+        elif file_name.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(uploaded_file)
+        else:
+            st.error("❌ Unsupported file format")
+            st.stop()
+            
         df.index = range(1, len(df) + 1)  # 인덱스를 1부터 시작하도록 재설정 / Reset index to start from 1
         st.session_state.uploaded_df = df
         
@@ -180,5 +190,3 @@ if st.session_state.value_ontology_mapping:
 # 하단 정보 제거 (교수님 피드백 반영) / Remove bottom warning (professor feedback applied)
 st.write("---")
 st.caption("Maptology uses the BioPortal API to search and map ontology terms.")
-
-
