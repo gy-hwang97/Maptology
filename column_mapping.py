@@ -7,7 +7,8 @@ from loading_overlay import show_loading_overlay
 
 # 컬럼 선택 및 온톨로지 매핑 섹션 렌더링 / Render column selection and ontology mapping section
 def render_column_mapping_section():
-    st.markdown('<div class="section-header section-red">Select Ontology Term for Column</div>', unsafe_allow_html=True)
+    st.write("### Map Ontology Terms for Columns")
+    st.caption("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them to each other. Start by selecting a column name from the dropdown below.")
     
     if st.session_state.uploaded_df is not None:
         columns = list(st.session_state.uploaded_df.columns)
