@@ -9,6 +9,7 @@ from schema import generate_linkml_schema
 # 매핑된 용어 섹션 렌더링 / Render mapped terms section
 def render_mapped_terms():
     st.write("### Mapped Ontology Terms")
+    st.caption("This table shows all the ontology terms you have mapped to your columns. You can view the full term details by clicking the links or remove mappings using the delete button.")
     
     header_col1, header_col2, header_col3, header_col4 = st.columns([3, 4, 2, 1])
     with header_col1:
@@ -74,6 +75,7 @@ def render_mapped_terms():
 # 값-온톨로지 매핑 정보 표시 / Display value-ontology mapping information
 def render_value_mappings():
     st.write("### Unique Values' Ontology Terms")
+    st.caption("This table shows the ontology terms mapped to specific data values within your columns. Each row represents a value-to-term mapping that you have created.")
     
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([2, 2, 3, 2, 1])
     with header_col1:
@@ -161,6 +163,9 @@ def render_value_mappings():
 
 # 다운로드 버튼 렌더링 / Render download buttons
 def render_download_buttons():
+    st.write("### Download Results")
+    st.caption("Export your mapping results in various formats for use in other applications or for record keeping.")
+    
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
