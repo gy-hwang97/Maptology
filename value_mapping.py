@@ -7,7 +7,8 @@ from loading_overlay import show_loading_overlay
 
 # 값 매핑 섹션 렌더링
 def render_value_mapping_section():
-    st.markdown('<div class="section-header section-blue">Select Ontology Term for Value</div>', unsafe_allow_html=True)
+    st.write("### Map Ontology Terms for Values")
+    st.caption("Now you can map ontology term(s) to each data value. Start by selecting a value from the dropdown below.")
     selected_col = st.session_state.selected_column
     df = st.session_state.uploaded_df
     
@@ -180,3 +181,4 @@ def render_value_mapping_section():
     else:
         # 문자열 타입이 아닌 경우 메시지 표시
         st.info("Only string values just for now!")
+
