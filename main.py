@@ -23,6 +23,9 @@ initialize_session()
 # 로고와 제목 표시 / Display logo and title
 render_header()
 
+# Tagline
+st.caption("Map your dataset to standardized ontology terms")
+
 # =============================================================================
 # API 키 입력 섹션 / API Key Input Section
 # =============================================================================
@@ -177,3 +180,4 @@ if st.session_state.value_ontology_mapping:
 # 하단 정보 제거 (교수님 피드백 반영) / Remove bottom warning (professor feedback applied)
 st.write("---")
 st.caption("Maptology uses the BioPortal API to search and map ontology terms.")
+
