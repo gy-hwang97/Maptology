@@ -4,7 +4,8 @@ from mapping import on_type_change
 
 # 데이터 값 섹션 렌더링 / Render data values section
 def render_data_values_section():
-    st.write("### Data Values")
+    st.write("### Select Data Types")
+    st.caption("For numeric columns, this section shows the minimum, maximum and average values for the data. For categorical columns, this section shows the unique values. And so forth. We attempt to correctly identify the correct data type for each column. However, you can manually specify the data type.")
     selected_col = st.session_state.selected_column
     df = st.session_state.uploaded_df
     
@@ -60,3 +61,4 @@ def render_data_values_section():
                 # 결측값 처리를 위한 버튼 / Button for missing value handling
                 if st.button("Apply Missing Values Handling"):
                     change_column_type(selected_col, st.session_state.type_select, handle_missing, missing_values)
+
