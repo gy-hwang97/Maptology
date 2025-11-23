@@ -1,4 +1,8 @@
 streamlit
-pyyaml
 pandas
 numpy
+requests
+openpyxl
+PyYAML
+pytest
+requests-mock
