@@ -136,13 +136,13 @@ if uploaded_file:
         
         # 하이라이트된 스타일로 데이터프레임 표시 / Display dataframe with highlighted style
         styled_df = df.head(20).style.apply(highlight_column, axis=None)
-        st.dataframe(styled_df, use_container_width=True)
+        st.dataframe(styled_df, width='stretch')
         
         # 하이라이트 설명 추가 / Add highlight explanation
         st.caption(f"Column '{highlighted_col}' highlighted due to recent type change")
     else:
         # 일반 미리보기 테이블 / Regular preview table
-        st.dataframe(st.session_state.uploaded_df.head(20), use_container_width=True)
+        st.dataframe(st.session_state.uploaded_df.head(20), width='stretch')
     
     # 온톨로지 선택 섹션 / Ontology selection section
     ontology_loading_container = st.empty()
