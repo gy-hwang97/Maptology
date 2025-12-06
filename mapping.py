@@ -254,31 +254,59 @@ def on_type_change():
 
 # 개별 용어 매핑 삭제 함수 / Individual term mapping deletion function
 def remove_term_mapping(column_name, term_uri):
-    if column_name and term_uri:
-        # 컬럼에 매핑된 용어 목록에서 해당 URI를 가진 항목 제거 / Remove items with the corresponding URI from the column's mapped term list
-        if column_name in st.session_state.column_mapping:
-            # 선택된 용어 목록에서 제거 / Remove from selected terms list
-            if term_uri in st.session_state.column_mapping[column_name].get("selected_terms", []):
-                st.session_state.column_mapping[column_name]["selected_terms"].remove(term_uri)
-            
-            # 매핑 정보에서 제거 / Remove from mapping information
-            st.session_state.column_mapping[column_name]["mapping_info"] = [
-                mapping for mapping in st.session_state.column_mapping[column_name].get("mapping_info", [])
-                if mapping["Ontology Term URI"] != term_uri
+    if not (column_name and term_uri):
+        return
+
+    # 1) 컬럼 매핑 정보에서 제거
+    if "column_mapping" in st.session_state and column_name in st.session_state.column_mapping:
+        col_map = st.session_state.column_mapping[column_name]
+
+        # 컬럼별 selected_terms 에서 제거
+        if "selected_terms" in col_map and term_uri in col_map["selected_terms"]:
+            col_map["selected_terms"].remove(term_uri)
+
+        # mapping_info 에서 제거
+        if "mapping_info" in col_map:
+            col_map["mapping_info"] = [
+                m for m in col_map["mapping_info"]
+                if m.get("Ontology Term URI") != term_uri
             ]
-            
-            # 전체 매핑 목록에서도 제거 / Also remove from overall mapping list
-            st.session_state.mapped_terms = [
-                mapping for mapping in st.session_state.mapped_terms 
-                if not (mapping["Original Label"] == column_name and mapping["Ontology Term URI"] == term_uri)
-            ]
-            
-            # 매핑이 모두 삭제된 경우 컬럼 매핑 자체 삭제 / Delete column mapping itself if all mappings are deleted
-            if not st.session_state.column_mapping[column_name]["mapping_info"]:
-                del st.session_state.column_mapping[column_name]
-                
-            st.success(f"'{column_name}'의 용어 매핑이 삭제되었습니다")  # Term mapping for '{column_name}' has been deleted
-            st.rerun()
+
+        # 더 이상 매핑이 없으면 이 컬럼 자체 매핑 제거
+        if not col_map.get("mapping_info"):
+            del st.session_state.column_mapping[column_name]
+
+    # 2) 전역 selected_terms 에서 제거
+    if "selected_terms" in st.session_state and term_uri in st.session_state.selected_terms:
+        st.session_state.selected_terms.remove(term_uri)
+
+    # 3) 검색어별 체크박스 상태(search_terms_selections)에서도 제거
+    if "search_terms_selections" in st.session_state:
+        # key 가 column_name 이거나 current_search_term 인 경우 둘 다 케어
+        for key in list(st.session_state.search_terms_selections.keys()):
+            if key == column_name or key == st.session_state.get("current_search_term"):
+                if term_uri in st.session_state.search_terms_selections[key]:
+                    st.session_state.search_terms_selections[key].remove(term_uri)
+
+    # 4) 전체 mapped_terms 리스트에서 제거
+    if "mapped_terms" in st.session_state:
+        st.session_state.mapped_terms = [
+            m for m in st.session_state.mapped_terms
+            if not (
+                m.get("Original Label") == column_name
+                and m.get("Ontology Term URI") == term_uri
+            )
+        ]
+    
+    # 5) Streamlit 체크박스 위젯 상태 제거 (핵심 수정!)
+    # 체크박스 키 패턴: "col_cb_{search_term}_{index}"
+    # 관련된 모든 체크박스 키를 찾아서 삭제 (다음 렌더링에서 새로 생성됨)
+    keys_to_delete = [key for key in st.session_state.keys() if key.startswith("col_cb_")]
+    for key in keys_to_delete:
+        del st.session_state[key]
+
+    st.success(f"'{column_name}'의 용어 매핑이 삭제되었습니다")
+    st.rerun()
 
 # 개별 값 매핑 삭제 함수 / Individual value mapping deletion function            
 def remove_individual_value_mapping(column_name, value, term_uri):
