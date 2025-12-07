@@ -56,12 +56,26 @@ Before using Maptology, you need a **free BioPortal API key**:
 3. Go to "Account" → "API Key" to get your key
 4. Copy your API key for use in the app
 
-### **Using the App**
+### **Using the Web App**
 **Link:** https://maptology.streamlit.app/
 
 1. Visit the app and enter your BioPortal API key
 2. Upload your CSV file
 3. Follow the guided mapping process to transform your data into a standardized format
+
+### For Local Users
+To run Maptology locally:
+
+1. Clone the repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Run: `streamlit run main.py`
+
+**Tip:** To skip entering your API key every time:
+1. Open `utils.py`
+2. Find: `API_KEY = ""`
+3. Change to: `API_KEY = "your-api-key-here"`
+
+⚠️ **Warning:** Never commit your API key to public repositories!
 
 ---
 
