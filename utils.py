@@ -8,7 +8,10 @@ API_KEY = ""
 def initialize_session():
     # API 키 세션 스테이트 추가
     if 'api_key' not in st.session_state:
-        st.session_state.api_key = None
+        if API_KEY:
+            st.session_state.api_key = API_KEY
+        else:
+            st.session_state.api_key = None
         
     if 'ontology_results' not in st.session_state:
         st.session_state.ontology_results = None
@@ -349,3 +352,4 @@ def change_column_type(column_name, new_type, handle_missing=False, missing_valu
             
         except Exception as e:
             st.error(f"Error changing type: {str(e)}")
+
