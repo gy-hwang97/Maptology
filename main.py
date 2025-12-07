@@ -32,7 +32,7 @@ st.caption("Map your dataset to standardized ontology terms")
 if not st.session_state.get('api_key'):
     st.markdown("### BioPortal API Key Required")
     st.markdown("Before using Maptology, you need a **free BioPortal API key**:")
-    
+
     with st.expander("How to get your API key", expanded=False):
         st.markdown("""
         1. Visit **https://bioportal.bioontology.org/**
@@ -40,14 +40,14 @@ if not st.session_state.get('api_key'):
         3. After logging in, go to **"Account" → "API Key"**
         4. Copy your API key and paste it below
         """)
-    
+
     api_key = st.text_input(
         "Enter your BioPortal API Key:", 
         type="password",
         placeholder="Paste your API key here...",
         help="Get your free API key at https://bioportal.bioontology.org/"
     )
-    
+
     col1, col2 = st.columns([1, 3])
     with col1:
         if st.button("Start Using Maptology", type="primary"):
@@ -58,16 +58,16 @@ if not st.session_state.get('api_key'):
                 st.rerun()
             else:
                 st.error("❌ Please enter a valid API key")
-    
+
     with col2:
         if api_key:
             if len(api_key.strip()) < 10:
                 st.warning("API key seems too short. Please check your key.")
-    
+
     if not api_key:
         st.info("**Need an API key?** Register for free at https://bioportal.bioontology.org/")
         st.warning("Please enter your BioPortal API key to continue")
-        
+
     st.stop()  # 앱 실행 중단
 
 # =============================================================================
@@ -86,17 +86,17 @@ uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls
 if uploaded_file:
     # 로딩 오버레이와 함께 CSV 파일 처리 / Process CSV file with loading overlay
     loading_container = st.empty()
-    
+
     with loading_container:
-        show_loading_overlay("Processing uploaded file...")
-    
+        show_loading_overlay("Loading...")
+
     try:
         # 인위적인 지연 추가 (로딩 화면을 보기 위해) / Add artificial delay to show loading screen
         time.sleep(1)
-        
+
         # 파일 형식에 따라 읽기 / Read file based on format
         file_name = uploaded_file.name.lower()
-        
+
         if file_name.endswith('.csv'):
             df = pd.read_csv(uploaded_file, skipinitialspace=True)
         elif file_name.endswith('.tsv'):
@@ -106,69 +106,73 @@ if uploaded_file:
         else:
             st.error("❌ Unsupported file format")
             st.stop()
-            
+
         df.index = range(1, len(df) + 1)  # 인덱스를 1부터 시작하도록 재설정 / Reset index to start from 1
         st.session_state.uploaded_df = df
-        
+
         # 로딩 오버레이 제거 / Remove loading overlay
         loading_container.empty()
-        
+
         # 파일 처리 완료 메시지 / File processing completion message
         st.success(f"✅ File uploaded successfully! Found {len(df)} rows and {len(df.columns)} columns.")
-        
+
     except Exception as e:
         loading_container.empty()
         st.error(f"❌ Error processing file: {str(e)}")
         st.stop()
-    
+
     st.write("### Preview Data")
     st.caption("This table shows the first 20 lines of your data so you can verify that the data were parsed properly.")
-    
+
     # 하이라이트된 컬럼이 있으면 스타일링 적용 / Apply styling if there's a highlighted column
     if 'highlighted_column' in st.session_state and st.session_state.highlighted_column in df.columns:
         highlighted_col = st.session_state.highlighted_column
-        
+
         # Pandas 스타일링을 사용하여 특정 컬럼 하이라이트 / Use Pandas styling to highlight specific column
         def highlight_column(x):
             df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
             df_styler[highlighted_col] = 'background-color: #90EE90;'  # 연한 녹색 배경 / Light green background
             return df_styler
-        
+
         # 하이라이트된 스타일로 데이터프레임 표시 / Display dataframe with highlighted style
         styled_df = df.head(20).style.apply(highlight_column, axis=None)
         st.dataframe(styled_df, width='stretch')
-        
+
         # 하이라이트 설명 추가 / Add highlight explanation
         st.caption(f"Column '{highlighted_col}' highlighted due to recent type change")
     else:
         # 일반 미리보기 테이블 / Regular preview table
         st.dataframe(st.session_state.uploaded_df.head(20), width='stretch')
-    
+
     # 온톨로지 선택 섹션 / Ontology selection section
-    ontology_loading_container = st.empty()
-    
-    with ontology_loading_container:
-        show_loading_overlay("Loading available ontologies...")
-    
-    # 인위적인 지연 추가 / Add artificial delay
-    time.sleep(1)
-    
-    available_ontologies = get_available_ontologies()
-    
-    # 로딩 오버레이 제거 / Remove loading overlay
-    ontology_loading_container.empty()
+    # 캐시에 없을 때만 로딩
+    if not st.session_state.available_ontologies:
+        ontology_loading_container = st.empty()
         
+        with ontology_loading_container:
+            show_loading_overlay("Loading...")
+        
+        time.sleep(1)
+        
+        available_ontologies = get_available_ontologies()
+        st.session_state.available_ontologies = available_ontologies  # 저장
+        
+        ontology_loading_container.empty()
+    else:
+        # 캐시에 있으면 그냥 사용
+        available_ontologies = st.session_state.available_ontologies
+
     if available_ontologies:
         st.success(f"✅ Loaded {len(available_ontologies)} ontologies")
-        
+
         st.write("### Select Ontologies")
         st.caption("We have just retrieved ontologies from BioPortal. The next step is to select one or more of these ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
-        
+
         render_ontology_selection(available_ontologies)
     else:
         st.error("❌ Failed to load ontologies. Please check your internet connection and API key.")
         st.stop()
-    
+
     # 컬럼 선택 및 온톨로지 매핑 섹션 / Column selection and ontology mapping section
     if st.session_state.selected_ontologies:
         render_column_mapping_section()
@@ -188,7 +192,7 @@ if st.session_state.mapped_terms:
 # 값-온톨로지 매핑 정보 표시 / Display value-ontology mapping information
 if st.session_state.value_ontology_mapping:
     render_value_mappings()
-    
+
     # 다운로드 버튼 / Download buttons
     render_download_buttons()
 
