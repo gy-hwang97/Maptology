@@ -2,7 +2,7 @@ import streamlit as st
 import yaml
 import json
 
-# LinkML YAML 스키마 생성 함수 - 수정
+# LinkML YAML 스키마 생성 함수 - LinkML 표준 형식으로 수정
 def generate_linkml_schema():
     if not st.session_state.mapped_terms:
         st.warning("No mappings available to generate schema.")
@@ -10,26 +10,20 @@ def generate_linkml_schema():
     
     # 스키마 기본 구조 생성
     schema = {
-        "id": "ontology_mapping_schema",
-        "name": "Ontology_Mapping_Schema",
+        "id": "https://example.org/ontology_mapping_schema",
+        "name": "ontology_mapping_schema",
         "description": "Schema for ontology mappings with support for multiple terms per column/value",
         "imports": ["linkml:types"],
         "prefixes": {
             "linkml": "https://w3id.org/linkml/",
             "schema": "http://schema.org/",
-            "xsd": "http://www.w3.org/2001/XMLSchema#"
+            "xsd": "http://www.w3.org/2001/XMLSchema#",
+            "ontology_mapping": "https://example.org/ontology_mapping/"
         },
         "default_prefix": "ontology_mapping",
+        "default_range": "string",
         "classes": {},
-        "slots": {},
-        "types": {}
-    }
-    
-    # 클래스 생성 - 각 매핑된 컬럼에 대해 하나의 클래스 생성
-    main_class = {
-        "name": "DataMapping",
-        "description": "A data mapping with multiple ontology terms",
-        "attributes": {}
+        "slots": {}
     }
     
     # 컬럼별로 그룹화
@@ -40,9 +34,16 @@ def generate_linkml_schema():
             column_mappings[column_name] = []
         column_mappings[column_name].append(mapping)
     
+    # 메인 클래스 생성
+    main_class = {
+        "name": "DataMapping",
+        "description": "A data mapping with multiple ontology terms",
+        "attributes": {}
+    }
+    
     # 그룹화된 매핑을 속성으로 추가
     for column_name, mappings in column_mappings.items():
-        safe_column_name = column_name.replace(" ", "_").lower()
+        safe_column_name = column_name.replace(" ", "_").replace("-", "_").lower()
         
         # 첫 번째 매핑에서 데이터 타입 가져오기
         data_type = mappings[0].get("Data Type", "String")
@@ -59,72 +60,113 @@ def generate_linkml_schema():
         else:
             range_value = "string"
         
-        # 속성 정의
-        main_class["attributes"][safe_column_name] = {
-            "description": f"Mapping for {column_name}",
-            "range": range_value,
-            "mappings": []
+        # 온톨로지 URI 목록 추출 (exact_mappings 용)
+        exact_mapping_uris = []
+        for mapping in mappings:
+            uri = mapping.get("Ontology Term URI", "")
+            if uri and uri not in exact_mapping_uris:
+                exact_mapping_uris.append(uri)
+        
+        # 속성 정의 - LinkML 표준 필드만 사용
+        attribute_def = {
+            "name": safe_column_name,
+            "description": f"Mapping for column: {column_name}",
+            "range": range_value
         }
         
-        # 각 매핑 추가
-        for mapping in mappings:
-            main_class["attributes"][safe_column_name]["mappings"].append({
-                "ontology": {
-                    "label": mapping["Preferred Label"],
-                    "ontology": mapping.get("Ontology Abbr", mapping["Ontology Name"]),
-                    "uri": mapping["Ontology Term URI"]
-                }
-            })
+        # exact_mappings 추가 (온톨로지 URI 목록)
+        if exact_mapping_uris:
+            attribute_def["exact_mappings"] = exact_mapping_uris
         
-        # 값 매핑이 있는 경우 추가
+        # 값 매핑이 있는 경우 comments에 추가 (LinkML 표준 필드)
         if column_name in st.session_state.value_ontology_mapping:
-            value_mappings_by_value = {}
+            value_comments = []
             for value, val_mappings in st.session_state.value_ontology_mapping[column_name].items():
-                if value not in value_mappings_by_value:
-                    value_mappings_by_value[value] = []
-                
-                # 여기가 에러 부분: val_mappings가 리스트이므로 각 항목에 대해 반복 처리
-                # val_mapping을 사용하기 전에 항상 리스트인지 딕셔너리인지 확인
                 if isinstance(val_mappings, list):
-                    # 리스트인 경우 각 항목 처리
                     for val_mapping in val_mappings:
                         if isinstance(val_mapping, dict) and "Preferred Label" in val_mapping:
-                            value_mappings_by_value[value].append({
-                                "mapped_term": {
-                                    "label": val_mapping["Preferred Label"],
-                                    "ontology": val_mapping.get("Ontology Abbr", val_mapping["Ontology Name"]),
-                                    "uri": val_mapping["Ontology Term URI"]
-                                }
-                            })
+                            comment = f"Value '{value}' maps to: {val_mapping['Preferred Label']} ({val_mapping.get('Ontology Term URI', '')})"
+                            value_comments.append(comment)
                 elif isinstance(val_mappings, dict) and "Preferred Label" in val_mappings:
-                    # 과거 형식의 딕셔너리인 경우 (하위 호환성)
-                    value_mappings_by_value[value].append({
-                        "mapped_term": {
-                            "label": val_mappings["Preferred Label"],
-                            "ontology": val_mappings.get("Ontology Abbr", val_mappings["Ontology Name"]),
-                            "uri": val_mappings["Ontology Term URI"]
-                        }
-                    })
+                    comment = f"Value '{value}' maps to: {val_mappings['Preferred Label']} ({val_mappings.get('Ontology Term URI', '')})"
+                    value_comments.append(comment)
             
-            # 값 매핑을 스키마에 추가
-            main_class["attributes"][safe_column_name]["value_mappings"] = []
-            for value, term_mappings in value_mappings_by_value.items():
-                main_class["attributes"][safe_column_name]["value_mappings"].append({
-                    "original_value": value,
-                    "terms": term_mappings
-                })
+            if value_comments:
+                attribute_def["comments"] = value_comments
+        
+        main_class["attributes"][safe_column_name] = attribute_def
     
     # 클래스 추가
     schema["classes"]["DataMapping"] = main_class
     
     return schema
 
+
+# 값 매핑 정보를 포함한 확장 스키마 생성 (JSON 전용 - 검증 목적 아님)
+def generate_extended_schema():
+    """값 매핑 정보를 포함한 확장 스키마 (내부 사용/문서화 목적)"""
+    if not st.session_state.mapped_terms:
+        return None
+    
+    schema = {
+        "schema_type": "extended_ontology_mapping",
+        "description": "Extended schema with value mappings (for documentation purposes, not LinkML compliant)",
+        "column_mappings": {},
+        "value_mappings": {}
+    }
+    
+    # 컬럼 매핑 정보
+    for mapping in st.session_state.mapped_terms:
+        column_name = mapping["Original Label"]
+        if column_name not in schema["column_mappings"]:
+            schema["column_mappings"][column_name] = {
+                "data_type": mapping.get("Data Type", "String"),
+                "ontology_terms": []
+            }
+        
+        schema["column_mappings"][column_name]["ontology_terms"].append({
+            "preferred_label": mapping["Preferred Label"],
+            "ontology_name": mapping["Ontology Name"],
+            "ontology_abbr": mapping.get("Ontology Abbr", ""),
+            "ontology_uri": mapping.get("Ontology URI", ""),
+            "term_uri": mapping["Ontology Term URI"],
+            "definition": mapping.get("Definition", "")
+        })
+    
+    # 값 매핑 정보
+    for column_name, value_dict in st.session_state.value_ontology_mapping.items():
+        if column_name not in schema["value_mappings"]:
+            schema["value_mappings"][column_name] = {}
+        
+        for value, val_mappings in value_dict.items():
+            schema["value_mappings"][column_name][value] = []
+            
+            if isinstance(val_mappings, list):
+                for val_mapping in val_mappings:
+                    if isinstance(val_mapping, dict) and "Preferred Label" in val_mapping:
+                        schema["value_mappings"][column_name][value].append({
+                            "preferred_label": val_mapping["Preferred Label"],
+                            "ontology_name": val_mapping["Ontology Name"],
+                            "term_uri": val_mapping["Ontology Term URI"],
+                            "definition": val_mapping.get("Definition", "")
+                        })
+            elif isinstance(val_mappings, dict) and "Preferred Label" in val_mappings:
+                schema["value_mappings"][column_name][value].append({
+                    "preferred_label": val_mappings["Preferred Label"],
+                    "ontology_name": val_mappings["Ontology Name"],
+                    "term_uri": val_mappings["Ontology Term URI"],
+                    "definition": val_mappings.get("Definition", "")
+                })
+    
+    return schema
+
+
 # LinkML 스키마 다운로드 함수
 def download_linkml_schema():
     schema = generate_linkml_schema()
     if schema:
         # YAML로 변환
-        yaml_str = yaml.dump(schema, sort_keys=False, default_flow_style=False)
+        yaml_str = yaml.dump(schema, sort_keys=False, default_flow_style=False, allow_unicode=True)
         
         # 다운로드 버튼 추가
         st.download_button(
