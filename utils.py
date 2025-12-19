@@ -4,9 +4,8 @@ import pandas as pd
 # API 키를 빈 문자열로 설정 (더 이상 하드코딩하지 않음)
 API_KEY = ""
 
-# 세션 상태 초기화 / Initialize session state
+# 세션 상태 초기화
 def initialize_session():
-    # API 키 세션 스테이트 추가
     if 'api_key' not in st.session_state:
         if API_KEY:
             st.session_state.api_key = API_KEY
@@ -26,7 +25,6 @@ def initialize_session():
     if 'column_mapping' not in st.session_state:
         st.session_state.column_mapping = {}
     
-    # 기존 selected_term_indices 대신 고유 식별자 리스트 selected_terms 사용 / Use unique identifier list selected_terms instead of existing selected_term_indices
     if 'selected_terms' not in st.session_state:
         st.session_state.selected_terms = []
     if 'search_term_indices' not in st.session_state:
@@ -42,7 +40,6 @@ def initialize_session():
     if 'selected_unique_value' not in st.session_state:
         st.session_state.selected_unique_value = None
         
-    # 기존 단일 value_term_indices 대신 값별로 저장 / Store by value instead of existing single value_term_indices
     if 'value_term_indices' not in st.session_state:
         st.session_state.value_term_indices = []
     if 'value_term_indices_by_value' not in st.session_state:
@@ -70,13 +67,19 @@ def initialize_session():
         st.session_state.ontologies_changed = False
     if 'search_terms_selections' not in st.session_state:
         st.session_state.search_terms_selections = {}
+    
+    # 삭제 카운터 초기화
+    if 'column_checkbox_counter' not in st.session_state:
+        st.session_state.column_checkbox_counter = 0
+    if 'value_checkbox_counter' not in st.session_state:
+        st.session_state.value_checkbox_counter = 0
 
-# API 키 가져오기 함수 추가
+# API 키 가져오기 함수
 def get_api_key():
     """세션 스테이트에서 API 키를 가져오는 함수"""
     return st.session_state.get('api_key', None)
 
-# CSS 스타일 추가 (변경 없음) / Add CSS styles (no changes)
+# CSS 스타일 추가
 def add_css():
     st.markdown("""
     <style>
@@ -101,10 +104,25 @@ def add_css():
         color: #555;
         margin-top: 4px;
     }
-    .stDataFrame {
-        width: 100%;
-        overflow-x: auto;
+    
+    /* OUTER wrapper: horizontal scroll 제거 */
+    div[data-testid="stDataFrame"] > div {
+    overflow-x: hidden !important;
     }
+
+    /* INNER resizable area: horizontal scroll 유지 */
+    div[data-testid="stDataFrame"] [data-testid="stDataFrameResizable"] {
+    overflow-x: auto !important;
+    }
+
+    /* 바깥쪽 스크롤바가 "보이기만" 하는 경우 완전 숨김 */
+    div[data-testid="stDataFrame"] > div::-webkit-scrollbar {
+    height: 0px !important;
+    }
+    div[data-testid="stDataFrame"] > div {
+    scrollbar-width: none !important; /* Firefox */
+    }
+    
     .delete-button {
         color: red;
         cursor: pointer;
@@ -224,17 +242,31 @@ def add_css():
         color: #333;
     }
     .section-green {
-    border-left: 5px solid #4CAF50;
+        border-left: 5px solid #4CAF50;
     }
     
     /* 파일 업로더의 X 버튼 숨기기 */
     .stFileUploader button[kind="icon"] {
         display: none !important;
     }
+    
+    /* 파일 업로더의 Browse files 버튼 숨기기 */
+    .stFileUploader button[kind="secondary"] {
+        display: none !important;
+    }
+    
+    /* Unique values 스타일 */
+    .unique-values-display {
+        background-color: #f8f9fa;
+        padding: 8px 12px;
+        border-radius: 5px;
+        border-left: 3px solid #4682B4;
+        margin: 5px 0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# pandas 데이터 타입을 사용자 친화적으로 변환하는 함수 / Function to convert pandas data types to user-friendly format
+# pandas 데이터 타입을 사용자 친화적으로 변환하는 함수
 def get_friendly_dtype(dtype):
     dtype_name = str(dtype)
     
@@ -255,59 +287,67 @@ def get_friendly_dtype(dtype):
     else:
         return "String"
 
-# 값 정보 표시 함수 (변경 없음) / Value information display function (no changes)
+# 값 정보 표시 함수 (깔끔한 형식으로 변경)
 def display_column_info(df, column_name):
     dtype = df[column_name].dtype
     dtype_name = str(dtype)
     
-    if dtype_name == 'object' or dtype_name.startswith('string'):
+    if dtype_name == 'object' or dtype_name.startswith('string') or dtype_name == 'category':
         unique_values = df[column_name].dropna().unique()
-        unique_values_list = unique_values[:5].tolist()
-        st.write("**Unique values (up to 5):**")
-        st.write(unique_values_list)
-        st.write(f"Total unique values: {len(unique_values)}")
+        total_count = len(unique_values)
+        
+        # 최대 5개까지만 표시
+        display_values = unique_values[:5].tolist()
+        values_str = ", ".join([str(v) for v in display_values])
+        
+        # 5개 초과면 "+N more" 추가
+        if total_count > 5:
+            remaining = total_count - 5
+            st.markdown(f"""
+            <div class="unique-values-display">
+                <strong>Unique values:</strong> {values_str}... <em>(+{remaining} more, {total_count} total)</em>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="unique-values-display">
+                <strong>Unique values:</strong> {values_str} <em>({total_count} total)</em>
+            </div>
+            """, unsafe_allow_html=True)
+            
     elif dtype_name.startswith('float') or dtype_name.startswith('int'):
         min_val = df[column_name].min()
         max_val = df[column_name].max()
         mean_val = df[column_name].mean()
-        st.write(f"**Minimum**: {min_val}")
-        st.write(f"**Maximum**: {max_val}")
-        st.write(f"**Average**: {mean_val:.2f}")
-    elif dtype_name == 'category':
-        categories = df[column_name].cat.categories.tolist()
-        st.write("**Categories (up to 5):**")
-        st.write(categories[:5])
-        st.write(f"Total categories: {len(categories)}")
+        st.markdown(f"""
+        <div class="unique-values-display">
+            <strong>Range:</strong> {min_val} ~ {max_val} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Average:</strong> {mean_val:.2f}
+        </div>
+        """, unsafe_allow_html=True)
+        
     elif dtype_name.startswith('datetime'):
         min_date = df[column_name].min()
         max_date = df[column_name].max()
-        st.write(f"**Date range**: {min_date} to {max_date}")
+        st.markdown(f"""
+        <div class="unique-values-display">
+            <strong>Date range:</strong> {min_date} ~ {max_date}
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.write("Sample values:")
-        st.write(df[column_name].head(5).tolist())
+        sample_values = df[column_name].head(5).tolist()
+        values_str = ", ".join([str(v) for v in sample_values])
+        st.markdown(f"""
+        <div class="unique-values-display">
+            <strong>Sample values:</strong> {values_str}
+        </div>
+        """, unsafe_allow_html=True)
 
-# 데이터 타입 변경 함수 (변경 없음) / Data type change function (no changes)
-def change_column_type(column_name, new_type, handle_missing=False, missing_values=None):
+# 데이터 타입 변경 함수
+def change_column_type(column_name, new_type):
     if column_name and st.session_state.uploaded_df is not None:
         df = st.session_state.uploaded_df
         
-        if 'before_conversion' not in st.session_state:
-            st.session_state.before_conversion = {}
-        
-        original_values = df[column_name].head(5).tolist()
-        st.session_state.before_conversion[column_name] = {
-            'original_type': str(df[column_name].dtype),
-            'original_values': original_values
-        }
-        
-        if handle_missing and missing_values:
-            for val in missing_values:
-                df[column_name] = df[column_name].replace(val, pd.NA)
-        
         try:
-            total_values = len(df[column_name])
-            non_null_before = df[column_name].notna().sum()
-            
             if new_type == "String":
                 df[column_name] = df[column_name].astype('string')
             elif new_type == "Categorical":
@@ -321,35 +361,16 @@ def change_column_type(column_name, new_type, handle_missing=False, missing_valu
             elif new_type == "Date":
                 df[column_name] = pd.to_datetime(df[column_name], errors='coerce')
             
-            non_null_after = df[column_name].notna().sum()
-            new_values = df[column_name].head(5).tolist()
-            
-            st.session_state.type_conversion_result = {
-                'column': column_name,
-                'from_type': st.session_state.before_conversion[column_name]['original_type'],
-                'to_type': str(df[column_name].dtype),
-                'before_values': original_values,
-                'after_values': new_values,
-                'total_values': total_values,
-                'values_changed': non_null_before != non_null_after,
-                'null_before': total_values - non_null_before,
-                'null_after': total_values - non_null_after
-            }
-            
             st.session_state.uploaded_df = df
             
+            # mapped_terms에서 해당 컬럼의 타입 업데이트
             for i, mapping in enumerate(st.session_state.mapped_terms):
                 if mapping["Original Label"] == column_name:
                     st.session_state.mapped_terms[i]["Data Type"] = new_type
             
-            st.session_state.highlighted_column = column_name
-            
-            message = f"Column '{column_name}' type changed from {st.session_state.before_conversion[column_name]['original_type']} to {new_type}"
-            if st.session_state.type_conversion_result['values_changed']:
-                message += f". {st.session_state.type_conversion_result['null_after'] - st.session_state.type_conversion_result['null_before']} values were converted to null during conversion."
-            
-            st.success(message)
+            return True
             
         except Exception as e:
             st.error(f"Error changing type: {str(e)}")
-
+            return False
+    return False
