@@ -41,23 +41,27 @@ if not st.session_state.get('api_key'):
         4. Copy your API key and paste it below
         """)
 
-    api_key = st.text_input(
-        "Enter your BioPortal API Key:", 
-        type="password",
-        placeholder="Paste your API key here...",
-        help="Get your free API key at https://bioportal.bioontology.org/"
-    )
-
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        if st.button("Start Using Maptology", type="primary"):
-            if api_key and len(api_key.strip()) > 10:  # 기본적인 validation
-                st.session_state.api_key = api_key.strip()
-                st.success("✅ API key saved! Loading application...")
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.error("❌ Please enter a valid API key")
+    # Form으로 감싸서 Enter 키 지원
+    with st.form(key="api_key_form"):
+        api_key = st.text_input(
+            "Enter your BioPortal API Key:", 
+            type="password",
+            placeholder="Paste your API key here...",
+            help="Get your free API key at https://bioportal.bioontology.org/"
+        )
+        
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            submit_button = st.form_submit_button("Start Using Maptology", type="primary")
+    
+    if submit_button:
+        if api_key and len(api_key.strip()) > 10:  # 기본적인 validation
+            st.session_state.api_key = api_key.strip()
+            st.success("✅ API key saved! Loading application...")
+            time.sleep(1)
+            st.rerun()
+        else:
+            st.error("❌ Please enter a valid API key")
 
     with col2:
         if api_key:
@@ -83,7 +87,32 @@ with st.sidebar:
 
 # CSV 파일 업로드 / CSV file upload
 uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls"])
+
+# 파일이 변경되었는지 확인 및 세션 상태 초기화
+if 'current_file_name' not in st.session_state:
+    st.session_state.current_file_name = None
+
 if uploaded_file:
+    # 새 파일이 업로드되면 모든 매핑 정보 초기화
+    if st.session_state.current_file_name != uploaded_file.name:
+        st.session_state.current_file_name = uploaded_file.name
+        # 모든 매핑 정보 초기화
+        st.session_state.mapped_terms = []
+        st.session_state.value_ontology_mapping = {}
+        st.session_state.column_mapping = {}
+        st.session_state.selected_terms = []
+        st.session_state.value_term_indices = []
+        st.session_state.value_term_indices_by_value = {}
+        st.session_state.selected_column = None
+        st.session_state.selected_unique_value = None
+        st.session_state.first_load = True
+        st.session_state.ontology_results = None
+        st.session_state.filtered_ontology_results = None
+        st.session_state.value_ontology_results = None
+        st.session_state.search_terms_selections = {}
+        st.session_state.column_states = {}
+        st.session_state.selected_ontologies = []
+    
     # 로딩 오버레이와 함께 CSV 파일 처리 / Process CSV file with loading overlay
     loading_container = st.empty()
 
@@ -136,13 +165,13 @@ if uploaded_file:
 
         # 하이라이트된 스타일로 데이터프레임 표시 / Display dataframe with highlighted style
         styled_df = df.head(20).style.apply(highlight_column, axis=None)
-        st.dataframe(styled_df, width='stretch')
+        st.dataframe(styled_df, width='stretch', hide_index=False)
 
         # 하이라이트 설명 추가 / Add highlight explanation
         st.caption(f"Column '{highlighted_col}' highlighted due to recent type change")
     else:
         # 일반 미리보기 테이블 / Regular preview table
-        st.dataframe(st.session_state.uploaded_df.head(20), width='stretch')
+        st.dataframe(st.session_state.uploaded_df.head(20), width='stretch', hide_index=False)
 
     # 온톨로지 선택 섹션 / Ontology selection section
     # 캐시에 없을 때만 로딩
@@ -185,6 +214,29 @@ if uploaded_file:
         if st.session_state.selected_column and st.session_state.uploaded_df is not None:
             render_value_mapping_section()
 
+else:
+    # 파일이 삭제되었을 때도 초기화
+    if st.session_state.current_file_name is not None:
+        st.session_state.current_file_name = None
+        # 모든 매핑 정보 초기화
+        st.session_state.mapped_terms = []
+        st.session_state.value_ontology_mapping = {}
+        st.session_state.column_mapping = {}
+        st.session_state.selected_terms = []
+        st.session_state.value_term_indices = []
+        st.session_state.value_term_indices_by_value = {}
+        st.session_state.selected_column = None
+        st.session_state.selected_unique_value = None
+        st.session_state.first_load = True
+        st.session_state.ontology_results = None
+        st.session_state.filtered_ontology_results = None
+        st.session_state.value_ontology_results = None
+        st.session_state.uploaded_df = None
+        st.session_state.search_terms_selections = {}
+        st.session_state.column_states = {}
+        st.session_state.selected_ontologies = []
+        st.rerun()
+
 # 매핑된 용어 및 삭제 버튼 표시 / Display mapped terms and delete buttons
 if st.session_state.mapped_terms:
     render_mapped_terms()
@@ -193,7 +245,8 @@ if st.session_state.mapped_terms:
 if st.session_state.value_ontology_mapping:
     render_value_mappings()
 
-    # 다운로드 버튼 / Download buttons
+# 다운로드 버튼 / Download buttons (컬럼 매핑 또는 값 매핑이 있으면 표시)
+if st.session_state.mapped_terms or st.session_state.value_ontology_mapping:
     render_download_buttons()
 
 # 하단 정보 제거 (교수님 피드백 반영) / Remove bottom warning (professor feedback applied)
