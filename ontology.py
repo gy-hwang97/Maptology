@@ -380,8 +380,8 @@ def search_bioportal_all(search_term):
                     if not pref_label or pref_label == "N/A":
                         continue
                     
-                    # 정의 (없으면 '정의 없음'으로 표시) / Definition (display as 'no definition' if none)
-                    definition = res.get("definition", [None])[0] if res.get("definition") else "정의 없음"  # No definition available
+                    # 정의 (없으면 'No definition available'으로 표시) / Definition (display as 'No definition available' if none)
+                    definition = res.get("definition", [None])[0] if res.get("definition") else "No definition available"
                     
                     # 온톨로지 약어 추출 / Extract ontology abbreviation
                     ontology_acronym = "Unknown"
@@ -416,11 +416,10 @@ def search_bioportal_all(search_term):
                     df_results = pd.DataFrame(ontology_data)
                     # 정렬: Preferred Label로 1차 정렬, Ontology Name으로 2차 정렬 / Sort: primary by Preferred Label, secondary by Ontology Name
                     df_results = df_results.sort_values(by=['Preferred Label', 'Ontology Name'])
-                    st.session_state.ontology_results = df_results
-                    st.session_state.filtered_ontology_results = df_results
+                    st.session_state.value_ontology_results = df_results  # ← value용으로 저장
                     
                     # 선택 초기화 / Initialize selection
-                    st.session_state.selected_terms = []
+                    st.session_state.value_term_indices = []  # ← value용 인덱스 초기화
                     
                     return True
                 else:
@@ -441,17 +440,26 @@ def search_bioportal_all(search_term):
 def select_none_ontologies():
     st.session_state.selected_ontologies = []
     st.session_state.ontologies_changed = True
+    st.rerun()  # ✅ 추가! 페이지 새로고침으로 체크박스 상태 업데이트
 
 # 온톨로지 선택 섹션 렌더링 / Render ontology selection section
 def render_ontology_selection(available_ontologies):
     st.markdown('<div class="section-header section-purple">Select Ontologies</div>', unsafe_allow_html=True)
     
-    # 실시간 업데이트 카운터용 컨테이너 생성 / Create container for real-time update counter
-    counter_container = st.empty()
+    # Select None 버튼과 Selected ontologies를 같은 줄에 배치
+    btn_col, info_col = st.columns([1, 4])
     
-    # Select None 버튼만 표시 / Show only Select None button
-    if st.button("Select None", key="btn_select_none"):
-        select_none_ontologies()
+    with btn_col:
+        if st.button("Select None", key="btn_select_none"):
+            select_none_ontologies()
+    
+    with info_col:
+        current_count = len(st.session_state.selected_ontologies)
+        max_count = 10
+        if st.session_state.selected_ontologies:
+            st.markdown(f"**Selected ontologies ({current_count}/{max_count}):** {', '.join(st.session_state.selected_ontologies)}")
+        else:
+            st.warning("Please select at least one ontology to proceed.")
     
     # 검색 필터링 추가 / Add search filtering
     filter_query = st.text_input("Filter ontologies", placeholder="Type to filter...")
@@ -497,51 +505,17 @@ def render_ontology_selection(available_ontologies):
                     if len(st.session_state.selected_ontologies) < max_count:
                         st.session_state.selected_ontologies.append(acronym)
                         st.session_state.ontologies_changed = True
-                        # 카운터 즉시 업데이트 / Immediately update counter
-                        current_count = len(st.session_state.selected_ontologies)
+                        st.rerun()
                     else:
                         st.error(f"Cannot select more than {max_count} ontologies")
                 elif not checkbox and acronym in st.session_state.selected_ontologies:
                     st.session_state.selected_ontologies.remove(acronym)
                     st.session_state.ontologies_changed = True
-                    # 카운터 즉시 업데이트 / Immediately update counter
-                    current_count = len(st.session_state.selected_ontologies)
+                    st.rerun()
                 
                 # 비활성화된 체크박스에 대한 설명 / Description for disabled checkboxes
                 if is_disabled:
                     st.caption("🚫 Remove other selections to enable this option")
-    
-    # 실시간 카운터 및 상태 메시지 업데이트 / Real-time counter and status message updates
-    current_count = len(st.session_state.selected_ontologies)
-    max_count = 10
-    
-    # 카운터 컨테이너에 실시간 업데이트 / Real-time update in counter container
-    with counter_container:
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            # 선택 개수 표시 (색상 코딩) / Display selection count (color coding)
-            if current_count >= max_count:
-                st.error(f"🚫 {current_count}/{max_count} - Maximum reached")
-            elif current_count >= max_count * 0.8:  # 80% 이상일 때 경고 / Warning when 80% or more
-                st.warning(f"⚠️ {current_count}/{max_count} - Nearly full")
-            else:
-                st.success(f"✅ {current_count}/{max_count} - Available")
-        
-        with col2:
-            # 추가 상태 메시지 / Additional status messages
-            if current_count >= max_count:
-                st.info("🚫 Remove some to select others")
-            elif current_count >= max_count * 0.8:
-                remaining = max_count - current_count
-                st.info(f"💡 {remaining} more available")
-            else:
-                st.info(f"🎯 Select up to {max_count - current_count} more")
-    
-    # 선택된 온톨로지 표시 / Display selected ontologies
-    if st.session_state.selected_ontologies:
-        st.write(f"**Selected ontologies ({current_count}/{max_count}):** {', '.join(st.session_state.selected_ontologies)}")
-    else:
-        st.warning("Please select at least one ontology to proceed.")
     
     # 온톨로지가 변경되었고 컬럼이 선택되어 있다면, 자동으로 검색 실행 / Automatically execute search if ontology changed and column is selected
     if st.session_state.ontologies_changed and st.session_state.selected_column and st.session_state.selected_ontologies:
