@@ -4,7 +4,11 @@ import json
 
 # LinkML YAML 스키마 생성 함수 - LinkML 표준 형식으로 수정
 def generate_linkml_schema():
-    if not st.session_state.mapped_terms:
+    # mapped_terms 또는 value_ontology_mapping 중 하나라도 있으면 스키마 생성
+    has_column_mappings = bool(st.session_state.mapped_terms)
+    has_value_mappings = bool(st.session_state.value_ontology_mapping)
+    
+    if not has_column_mappings and not has_value_mappings:
         st.warning("No mappings available to generate schema.")
         return None
     
@@ -96,6 +100,63 @@ def generate_linkml_schema():
         
         main_class["attributes"][safe_column_name] = attribute_def
     
+    # value_ontology_mapping만 있는 경우 (mapped_terms 없음)
+    if not has_column_mappings and has_value_mappings:
+        for column_name, value_dict in st.session_state.value_ontology_mapping.items():
+            safe_column_name = column_name.replace(" ", "_").replace("-", "_").lower()
+            
+            value_comments = []
+            exact_mapping_uris = []
+            data_type = "String"
+            
+            for value, val_mappings in value_dict.items():
+                if isinstance(val_mappings, list):
+                    for val_mapping in val_mappings:
+                        if isinstance(val_mapping, dict) and "Preferred Label" in val_mapping:
+                            comment = f"Value '{value}' maps to: {val_mapping['Preferred Label']} ({val_mapping.get('Ontology Term URI', '')})"
+                            value_comments.append(comment)
+                            uri = val_mapping.get('Ontology Term URI', '')
+                            if uri and uri not in exact_mapping_uris:
+                                exact_mapping_uris.append(uri)
+                            if 'Data Type' in val_mapping:
+                                data_type = val_mapping['Data Type']
+                elif isinstance(val_mappings, dict) and "Preferred Label" in val_mappings:
+                    comment = f"Value '{value}' maps to: {val_mappings['Preferred Label']} ({val_mappings.get('Ontology Term URI', '')})"
+                    value_comments.append(comment)
+                    uri = val_mappings.get('Ontology Term URI', '')
+                    if uri and uri not in exact_mapping_uris:
+                        exact_mapping_uris.append(uri)
+                    if 'Data Type' in val_mappings:
+                        data_type = val_mappings['Data Type']
+            
+            # 데이터 타입 변환
+            if data_type == "String" or data_type == "Categorical":
+                range_value = "string"
+            elif data_type == "Integer":
+                range_value = "integer"
+            elif data_type == "Float":
+                range_value = "float"
+            elif data_type == "Boolean":
+                range_value = "boolean"
+            elif data_type == "Date":
+                range_value = "date"
+            else:
+                range_value = "string"
+            
+            attribute_def = {
+                "name": safe_column_name,
+                "description": f"Value mapping for column: {column_name}",
+                "range": range_value
+            }
+            
+            if exact_mapping_uris:
+                attribute_def["exact_mappings"] = exact_mapping_uris
+            
+            if value_comments:
+                attribute_def["comments"] = value_comments
+            
+            main_class["attributes"][safe_column_name] = attribute_def
+    
     # 클래스 추가
     schema["classes"]["DataMapping"] = main_class
     
@@ -105,7 +166,10 @@ def generate_linkml_schema():
 # 값 매핑 정보를 포함한 확장 스키마 생성 (JSON 전용 - 검증 목적 아님)
 def generate_extended_schema():
     """값 매핑 정보를 포함한 확장 스키마 (내부 사용/문서화 목적)"""
-    if not st.session_state.mapped_terms:
+    has_column_mappings = bool(st.session_state.mapped_terms)
+    has_value_mappings = bool(st.session_state.value_ontology_mapping)
+    
+    if not has_column_mappings and not has_value_mappings:
         return None
     
     schema = {
