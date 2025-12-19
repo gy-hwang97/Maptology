@@ -68,7 +68,11 @@ To run Maptology locally:
 
 1. Clone the repository
 2. Install dependencies: `pip install -r requirements.txt`
-3. Run: `python3 -m streamlit run main.py`
+3. Run: `streamlit run main.py`
+   - If that doesn't work, try one of these:
+     - `python -m streamlit run main.py`
+     - `python3 -m streamlit run main.py`
+     - `py -m streamlit run main.py`
 
 **Tip:** To skip entering your API key every time:
 1. Open `utils.py`
