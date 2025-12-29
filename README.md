@@ -49,6 +49,8 @@ Validate mappings and download your standardized dataset
 <h2>Getting Started</h2>
 
 ### **Prerequisites**
+Streamlit currently supports versions 3.9, 3.10, 3.11, 3.12, 3.13, and 3.14 of Python
+
 Before using Maptology, you need a **free BioPortal API key**:
 
 1. Visit https://bioportal.bioontology.org/
