@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import requests
 
 from utils import initialize_session, add_css
 from components import render_header
@@ -55,11 +56,26 @@ if not st.session_state.get('api_key'):
             submit_button = st.form_submit_button("Start Using Maptology", type="primary")
     
     if submit_button:
-        if api_key and len(api_key.strip()) > 10:  # 기본적인 validation
-            st.session_state.api_key = api_key.strip()
-            st.success("✅ API key saved! Loading application...")
-            time.sleep(1)
-            st.rerun()
+        if api_key and len(api_key.strip()) > 10:
+            # 실제 BioPortal API 호출로 키 검증
+            try:
+                with st.spinner("Validating API key..."):
+                    test_url = f"https://data.bioontology.org/ontologies?apikey={api_key.strip()}"
+                    response = requests.get(test_url, timeout=10)
+                    
+                    if response.status_code == 200:
+                        st.session_state.api_key = api_key.strip()
+                        st.success("✅ API key validated! Loading application...")
+                        time.sleep(1)
+                        st.rerun()
+                    elif response.status_code == 401 or response.status_code == 403:
+                        st.error("❌ Invalid API key. Please check your key and try again.")
+                    else:
+                        st.error(f"❌ API validation failed (Status: {response.status_code}). Please try again.")
+            except requests.exceptions.Timeout:
+                st.error("❌ Connection timeout. Please check your internet connection and try again.")
+            except requests.exceptions.RequestException as e:
+                st.error(f"❌ Connection error: {str(e)}")
         else:
             st.error("❌ Please enter a valid API key")
 
