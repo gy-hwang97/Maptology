@@ -83,6 +83,42 @@ def get_api_key():
 def add_css():
     st.markdown("""
     <style>
+    /* 전체 폰트 크기 키우기 - 더 강력한 선택자 */
+    .main .block-container p,
+    .main .block-container span,
+    .main .block-container label,
+    .main .block-container div {
+        font-size: 16px !important;
+    }
+    
+    /* 파일 업로더 텍스트 */
+    [data-testid="stFileUploader"] label p {
+        font-size: 18px !important;
+        font-weight: 500 !important;
+    }
+    
+    [data-testid="stFileUploader"] small,
+    [data-testid="stFileUploader"] span {
+        font-size: 15px !important;
+    }
+    
+    /* 캡션 크기 */
+    [data-testid="stCaptionContainer"] p,
+    .stCaption p {
+        font-size: 15px !important;
+    }
+    
+    /* selectbox, text input 라벨 */
+    [data-testid="stSelectbox"] label p,
+    [data-testid="stTextInput"] label p {
+        font-size: 16px !important;
+    }
+    
+    /* expander 텍스트 */
+    [data-testid="stExpander"] p {
+        font-size: 16px !important;
+    }
+    
     .main .block-container {
         max-width: 95% !important;
         padding: 1rem;
