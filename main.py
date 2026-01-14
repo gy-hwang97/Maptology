@@ -24,8 +24,8 @@ initialize_session()
 # 로고와 제목 표시 / Display logo and title
 render_header()
 
-# Tagline
-st.caption("Map your dataset to standardized ontology terms")
+# Tagline (더 큰 글씨로)
+st.markdown("<p style='font-size: 30px; margin-bottom: 20px;'>Map your dataset to standardized ontology terms</p>", unsafe_allow_html=True)
 
 # =============================================================================
 # API 키 입력 섹션 / API Key Input Section
@@ -102,7 +102,8 @@ with st.sidebar:
         st.rerun()
 
 # CSV 파일 업로드 / CSV file upload
-uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls"])
+st.markdown("<p style='font-size: 23px; font-weight: 500; margin-bottom: 5px;'>Upload File</p>", unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls"], label_visibility="collapsed")
 
 # 파일이 변경되었는지 확인 및 세션 상태 초기화
 if 'current_file_name' not in st.session_state:
