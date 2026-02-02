@@ -24,8 +24,8 @@ initialize_session()
 # 로고와 제목 표시 / Display logo and title
 render_header()
 
-# Tagline (더 큰 글씨로)
-st.markdown("<p style='font-size: 30px; margin-bottom: 20px;'>Map your dataset to standardized ontology terms</p>", unsafe_allow_html=True)
+# Tagline (수정됨: HTML 스타일 제거)
+st.markdown("### Map your dataset to standardized ontology terms")
 
 # =============================================================================
 # API 키 입력 섹션 / API Key Input Section
@@ -101,9 +101,8 @@ with st.sidebar:
         st.session_state.api_key = None
         st.rerun()
 
-# CSV 파일 업로드 / CSV file upload
-st.markdown("<p style='font-size: 23px; font-weight: 500; margin-bottom: 5px;'>Upload File</p>", unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls"], label_visibility="collapsed")
+# CSV 파일 업로드 (수정됨: 별도 제목 제거)
+uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls"])
 
 # 파일이 변경되었는지 확인 및 세션 상태 초기화
 if 'current_file_name' not in st.session_state:
@@ -212,7 +211,8 @@ if uploaded_file:
         st.success(f"✅ Loaded {len(available_ontologies)} ontologies")
 
         st.write("### Select Ontologies")
-        st.caption("We have just retrieved ontologies from BioPortal. The next step is to select one or more of these ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
+        # 수정됨: st.caption -> st.write
+        st.write("We have just retrieved ontologies from BioPortal. The next step is to select one or more of these ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
 
         render_ontology_selection(available_ontologies)
     else:
