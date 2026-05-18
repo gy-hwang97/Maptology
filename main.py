@@ -1,118 +1,46 @@
 import streamlit as st
 import pandas as pd
-import time
-import requests
 
 from utils import initialize_session, add_css
 from components import render_header
 from ontology import render_ontology_selection, get_available_ontologies, search_ontology
 from column_mapping import render_column_mapping_section
-from data_values import render_data_values_section
 from value_mapping import render_value_mapping_section
 from mapping_display import render_mapped_terms, render_value_mappings, render_download_buttons
 from loading_overlay import show_loading_overlay
 
-# Streamlit 기본 페이지 설정 / Streamlit basic page configuration
+# Streamlit basic page configuration
 st.set_page_config(page_title='Maptology', layout='wide')
 
-# CSS 스타일 추가 / Add CSS styles
+# Add CSS styles
 add_css()
 
-# 세션 상태 초기화 / Initialize session state
+# Initialize session state
 initialize_session()
 
-# 로고와 제목 표시 / Display logo and title
+# Display logo and title
 render_header()
 
-# Tagline (수정됨: HTML 스타일 제거)
+# Tagline
 st.markdown("### Map your dataset to standardized ontology terms")
+st.caption("Maptology helps you search and map ontology terms to your dataset columns and values, then export the results in standardized formats.")
 
 # =============================================================================
-# API 키 입력 섹션 / API Key Input Section
-# =============================================================================
-if not st.session_state.get('api_key'):
-    st.markdown("### BioPortal API Key Required")
-    st.markdown("Before using Maptology, you need a **free BioPortal API key**:")
-
-    with st.expander("How to get your API key", expanded=False):
-        st.markdown("""
-        1. Visit **https://bioportal.bioontology.org/**
-        2. Click **"Login"** or **"Register"** to create a free account
-        3. After logging in, go to **"Account" → "API Key"**
-        4. Copy your API key and paste it below
-        """)
-
-    # Form으로 감싸서 Enter 키 지원
-    with st.form(key="api_key_form"):
-        api_key = st.text_input(
-            "Enter your BioPortal API Key:", 
-            type="password",
-            placeholder="Paste your API key here...",
-            help="Get your free API key at https://bioportal.bioontology.org/"
-        )
-        
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            submit_button = st.form_submit_button("Start Using Maptology", type="primary")
-    
-    if submit_button:
-        if api_key and len(api_key.strip()) > 10:
-            # 실제 BioPortal API 호출로 키 검증
-            try:
-                with st.spinner("Validating API key..."):
-                    test_url = f"https://data.bioontology.org/ontologies?apikey={api_key.strip()}"
-                    response = requests.get(test_url, timeout=10)
-                    
-                    if response.status_code == 200:
-                        st.session_state.api_key = api_key.strip()
-                        st.success("✅ API key validated! Loading application...")
-                        time.sleep(1)
-                        st.rerun()
-                    elif response.status_code == 401 or response.status_code == 403:
-                        st.error("❌ Invalid API key. Please check your key and try again.")
-                    else:
-                        st.error(f"❌ API validation failed (Status: {response.status_code}). Please try again.")
-            except requests.exceptions.Timeout:
-                st.error("❌ Connection timeout. Please check your internet connection and try again.")
-            except requests.exceptions.RequestException as e:
-                st.error(f"❌ Connection error: {str(e)}")
-        else:
-            st.error("❌ Please enter a valid API key")
-
-    with col2:
-        if api_key:
-            if len(api_key.strip()) < 10:
-                st.warning("API key seems too short. Please check your key.")
-
-    if not api_key:
-        st.info("**Need an API key?** Register for free at https://bioportal.bioontology.org/")
-        st.warning("Please enter your BioPortal API key to continue")
-
-    st.stop()  # 앱 실행 중단
-
-# =============================================================================
-# 메인 앱 시작 (API 키가 있을 때만) / Main App Start (only when API key exists)
+# Step 1: File Upload (no API key needed)
 # =============================================================================
 
-# API 키 상태 표시 (작은 표시기)
-with st.sidebar:
-    st.success("API Key: Active")
-    if st.button("Change API Key"):
-        st.session_state.api_key = None
-        st.rerun()
+st.write("### Step 1: Upload File")
+uploaded_file = st.file_uploader("Drag and drop or browse files", type=["csv", "tsv", "xlsx", "xls"], label_visibility="collapsed")
 
-# CSV 파일 업로드 (수정됨: 별도 제목 제거)
-uploaded_file = st.file_uploader("Upload File", type=["csv", "tsv", "xlsx", "xls"])
-
-# 파일이 변경되었는지 확인 및 세션 상태 초기화
+# Check if file changed and reset session state
 if 'current_file_name' not in st.session_state:
     st.session_state.current_file_name = None
 
 if uploaded_file:
-    # 새 파일이 업로드되면 모든 매핑 정보 초기화
+    # Reset all mapping info when a new file is uploaded
     if st.session_state.current_file_name != uploaded_file.name:
         st.session_state.current_file_name = uploaded_file.name
-        # 모든 매핑 정보 초기화
+        # Reset all mapping info
         st.session_state.mapped_terms = []
         st.session_state.value_ontology_mapping = {}
         st.session_state.column_mapping = {}
@@ -128,18 +56,16 @@ if uploaded_file:
         st.session_state.search_terms_selections = {}
         st.session_state.column_states = {}
         st.session_state.selected_ontologies = []
-    
-    # 로딩 오버레이와 함께 CSV 파일 처리 / Process CSV file with loading overlay
+        st.session_state.column_data_types = {}
+
+    # Process file with loading overlay
     loading_container = st.empty()
 
     with loading_container:
         show_loading_overlay("Loading...")
 
     try:
-        # 인위적인 지연 추가 (로딩 화면을 보기 위해) / Add artificial delay to show loading screen
-        time.sleep(1)
-
-        # 파일 형식에 따라 읽기 / Read file based on format
+        # Read file based on format
         file_name = uploaded_file.name.lower()
 
         if file_name.endswith('.csv'):
@@ -149,93 +75,91 @@ if uploaded_file:
         elif file_name.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(uploaded_file)
         else:
-            st.error("❌ Unsupported file format")
+            st.error("Unsupported file format")
             st.stop()
 
-        df.index = range(1, len(df) + 1)  # 인덱스를 1부터 시작하도록 재설정 / Reset index to start from 1
+        df.index = range(1, len(df) + 1)
         st.session_state.uploaded_df = df
 
-        # 로딩 오버레이 제거 / Remove loading overlay
+        # Remove loading overlay
         loading_container.empty()
 
-        # 파일 처리 완료 메시지 / File processing completion message
-        st.success(f"✅ File uploaded successfully! Found {len(df)} rows and {len(df.columns)} columns.")
+        # File processing completion message
+        st.success("File uploaded successfully! Found " + str(len(df)) + " rows and " + str(len(df.columns)) + " columns.")
 
     except Exception as e:
         loading_container.empty()
-        st.error(f"❌ Error processing file: {str(e)}")
+        st.error("Error processing file: " + str(e))
         st.stop()
 
-    st.write("### Preview Data")
+    st.write("### Step 2: Preview Data")
     st.caption("This table shows the first 20 lines of your data so you can verify that the data were parsed properly.")
 
-    # 하이라이트된 컬럼이 있으면 스타일링 적용 / Apply styling if there's a highlighted column
+    # Apply styling if there's a highlighted column
     if 'highlighted_column' in st.session_state and st.session_state.highlighted_column in df.columns:
         highlighted_col = st.session_state.highlighted_column
 
-        # Pandas 스타일링을 사용하여 특정 컬럼 하이라이트 / Use Pandas styling to highlight specific column
         def highlight_column(x):
             df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
-            df_styler[highlighted_col] = 'background-color: #90EE90;'  # 연한 녹색 배경 / Light green background
+            df_styler[highlighted_col] = 'background-color: #90EE90;'
             return df_styler
 
-        # 하이라이트된 스타일로 데이터프레임 표시 / Display dataframe with highlighted style
         styled_df = df.head(20).style.apply(highlight_column, axis=None)
         st.dataframe(styled_df, width='stretch', hide_index=False)
 
-        # 하이라이트 설명 추가 / Add highlight explanation
-        st.caption(f"Column '{highlighted_col}' highlighted due to recent type change")
+        st.caption("Column '" + highlighted_col + "' highlighted due to recent type change")
     else:
-        # 일반 미리보기 테이블 / Regular preview table
         st.dataframe(st.session_state.uploaded_df.head(20), width='stretch', hide_index=False)
 
-    # 온톨로지 선택 섹션 / Ontology selection section
-    # 캐시에 없을 때만 로딩
+    # Ontology selection section
     if not st.session_state.available_ontologies:
         ontology_loading_container = st.empty()
-        
+
         with ontology_loading_container:
-            show_loading_overlay("Loading...")
-        
-        time.sleep(1)
-        
+            show_loading_overlay("Loading ontologies...")
+
         available_ontologies = get_available_ontologies()
-        st.session_state.available_ontologies = available_ontologies  # 저장
-        
+        st.session_state.available_ontologies = available_ontologies
+
         ontology_loading_container.empty()
     else:
-        # 캐시에 있으면 그냥 사용
         available_ontologies = st.session_state.available_ontologies
 
     if available_ontologies:
-        st.success(f"✅ Loaded {len(available_ontologies)} ontologies")
+        st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
 
-        st.write("### Select Ontologies")
-        # 수정됨: st.caption -> st.write
-        st.write("We have just retrieved ontologies from BioPortal. The next step is to select one or more of these ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
+        st.write("### Step 3: Select Ontologies")
+        st.caption("Select one or more ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
 
         render_ontology_selection(available_ontologies)
     else:
-        st.error("❌ Failed to load ontologies. Please check your internet connection and API key.")
+        st.error("Failed to load ontologies. Please check that the ontology cache has been built.")
         st.stop()
 
-    # 컬럼 선택 및 온톨로지 매핑 섹션 / Column selection and ontology mapping section
+    # Column selection and ontology mapping section
     if st.session_state.selected_ontologies:
         render_column_mapping_section()
 
-        # 데이터 타입 감지 및 수정 섹션 / Data type detection and modification section
-        if st.session_state.selected_column and st.session_state.uploaded_df is not None:
-            render_data_values_section()
+        # Mapped Ontology Terms - displayed right after column mapping
+        if st.session_state.mapped_terms:
+            render_mapped_terms()
 
-        # 값을 온톨로지 용어에 매핑 섹션 / Section for mapping values to ontology terms
+        # Section for mapping values to ontology terms
         if st.session_state.selected_column and st.session_state.uploaded_df is not None:
             render_value_mapping_section()
 
+        # Unique Values' Ontology Terms - displayed right after value mapping
+        if st.session_state.value_ontology_mapping:
+            render_value_mappings()
+
+        # Download buttons
+        if st.session_state.mapped_terms or st.session_state.value_ontology_mapping:
+            render_download_buttons()
+
 else:
-    # 파일이 삭제되었을 때도 초기화
+    # Reset when file is removed
     if st.session_state.current_file_name is not None:
         st.session_state.current_file_name = None
-        # 모든 매핑 정보 초기화
         st.session_state.mapped_terms = []
         st.session_state.value_ontology_mapping = {}
         st.session_state.column_mapping = {}
@@ -252,20 +176,8 @@ else:
         st.session_state.search_terms_selections = {}
         st.session_state.column_states = {}
         st.session_state.selected_ontologies = []
+        st.session_state.column_data_types = {}
         st.rerun()
 
-# 매핑된 용어 및 삭제 버튼 표시 / Display mapped terms and delete buttons
-if st.session_state.mapped_terms:
-    render_mapped_terms()
-
-# 값-온톨로지 매핑 정보 표시 / Display value-ontology mapping information
-if st.session_state.value_ontology_mapping:
-    render_value_mappings()
-
-# 다운로드 버튼 / Download buttons (컬럼 매핑 또는 값 매핑이 있으면 표시)
-if st.session_state.mapped_terms or st.session_state.value_ontology_mapping:
-    render_download_buttons()
-
-# 하단 정보 제거 (교수님 피드백 반영) / Remove bottom warning (professor feedback applied)
 st.write("---")
-st.caption("Maptology uses the BioPortal API to search and map ontology terms.")
+st.caption("Maptology maps ontology terms to your dataset using precomputed TF-IDF vectors for fast search.")

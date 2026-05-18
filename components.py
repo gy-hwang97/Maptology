@@ -1,7 +1,44 @@
 import streamlit as st
+import urllib.parse
 
 # 로고와 제목을 컬럼으로 표시 / Display logo and title in columns
 def render_header():
-    col1, col2 = st.columns([1, 10])
+    col1, col2 = st.columns([3, 10])
     with col1:
-        st.image("maptology.png", width=200)  # 경로 슬래시 방향 수정 / Fixed path slash direction
+        st.image("maptology.png", width=1000)
+
+def set_term_preview(pref_label, ontology_abbr, full_ontology_name, definition, term_uri, preview_key, synonyms=None):
+    """프리뷰 패널에 표시할 정보를 세션에 저장 / Store term info in session state for preview panel.
+
+    All values come from the local TF-IDF cache (no network calls)."""
+    st.session_state[preview_key] = {
+        "pref_label": pref_label,
+        "ontology_abbr": ontology_abbr,
+        "full_ontology_name": full_ontology_name,
+        "definition": definition,
+        "term_uri": term_uri,
+        "synonyms": list(synonyms) if synonyms else []
+    }
+
+def render_preview_panel(preview_key):
+    """오른쪽 패널에 Term Preview 표시 / Render Term Preview in right panel"""
+    with st.container(border=True):
+        st.markdown("#### Term Preview")
+        if preview_key in st.session_state and st.session_state[preview_key]:
+            info = st.session_state[preview_key]
+            st.markdown(f"**Term:** {info['pref_label']}")
+            ontology_url = f"https://bioportal.bioontology.org/ontologies/{info['ontology_abbr']}"
+            st.markdown(f"**Ontology:** [{info['full_ontology_name']} ({info['ontology_abbr']})]({ontology_url})")
+            definition = info.get('definition')
+            if definition and definition != "No definition available":
+                st.markdown(f"**Definition:** {definition}")
+            else:
+                st.markdown("**Definition:** _No definition available in the local ontology cache._")
+            synonyms = info.get('synonyms') or []
+            if synonyms:
+                st.markdown(f"**Synonyms:** {', '.join(str(s) for s in synonyms)}")
+            encoded_uri = urllib.parse.quote(info['term_uri'], safe='')
+            detail_url = f"https://bioportal.bioontology.org/ontologies/{info['ontology_abbr']}?p=classes&conceptid={encoded_uri}"
+            st.caption(f"[Open this term on BioPortal ↗]({detail_url})")
+        else:
+            st.caption("Click ℹ️ next to a term to view its details.")

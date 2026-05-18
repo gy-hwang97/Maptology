@@ -172,3 +172,34 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# ============================================================
+# Maptology-specific
+# ============================================================
+
+# Large local data & caches - never commit (multi-GB)
+ontology_cache/
+tfidf_cache/
+text2term/
+
+# Local virtual environment
+venv312/
+
+# Editor settings
+.vscode/
+
+# Build artifacts
+_worker_status.json
+*.bak/
+
+# Local-only dev / rollback scripts - intentionally not published.
+# (Remove an entry here if you ever want to publish that script.)
+*_old.py
+owl_test.py
+owl_test2.py
+owltest.py
+rebuild_ncit_cache.py
+benchmark_text2term_vs_maptology.py
+Benchmark_formats.py
+SSSOM_validator.py
+text2term_practice.py
