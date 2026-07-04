@@ -1,6 +1,7 @@
 import streamlit as st
 import yaml
 import json
+import os
 import pandas as pd
 import io
 from utils import get_column_data_type
@@ -13,9 +14,9 @@ try:
 except ImportError:
     SSSOM_AVAILABLE = False
 
-# friendly data type을 LinkML range로 변환
+# Convert a friendly data type to a LinkML range
 def dtype_to_range(data_type):
-    """Data Type 문자열을 LinkML range 값으로 변환"""
+    """Convert a Data Type string to a LinkML range value."""
     if data_type == "String":
         return "string"
     elif data_type == "Integer":
@@ -33,9 +34,9 @@ def dtype_to_range(data_type):
     else:
         return "string"
 
-# LinkML YAML 스키마 생성 함수 - LinkML 표준 형식으로 수정
+# Generate a LinkML YAML schema (standard LinkML format)
 def generate_linkml_schema():
-    # mapped_terms 또는 value_ontology_mapping 중 하나라도 있으면 스키마 생성
+    # Generate a schema if either mapped_terms or value_ontology_mapping exists
     has_column_mappings = bool(st.session_state.mapped_terms)
     has_value_mappings = bool(st.session_state.value_ontology_mapping)
     
@@ -43,7 +44,7 @@ def generate_linkml_schema():
         st.warning("No mappings available to generate schema.")
         return None
     
-    # 스키마 기본 구조 생성
+    # Build the base schema structure
     schema = {
         "id": "https://example.org/ontology_mapping_schema",
         "name": "ontology_mapping_schema",
@@ -61,7 +62,7 @@ def generate_linkml_schema():
         "slots": {}
     }
     
-    # 컬럼별로 그룹화
+    # Group by column
     column_mappings = {}
     for mapping in st.session_state.mapped_terms:
         column_name = mapping["Original Label"]
@@ -69,31 +70,33 @@ def generate_linkml_schema():
             column_mappings[column_name] = []
         column_mappings[column_name].append(mapping)
     
-    # 메인 클래스 생성
+    # Create the main class
     main_class = {
         "name": "DataMapping",
         "description": "A data mapping with multiple ontology terms",
         "attributes": {}
     }
     
-    # 그룹화된 매핑을 속성으로 추가
+    # Add the grouped mappings as attributes
     for column_name, mappings in column_mappings.items():
         safe_column_name = column_name.replace(" ", "_").replace("-", "_").lower()
         
-        # DataFrame에서 현재 데이터 타입 가져오기
+        # Get the current data type from the DataFrame
         data_type = get_column_data_type(column_name)
         range_value = dtype_to_range(data_type)
         
-        # 온톨로지 URI 목록 추출 (exact_mappings 용)
+        # Collect the ontology URIs (for exact_mappings)
         exact_mapping_uris = []
         for mapping in mappings:
             uri = mapping.get("Ontology Term URI", "")
             if uri and uri not in exact_mapping_uris:
                 exact_mapping_uris.append(uri)
         
-        # 속성 정의 - LinkML 표준 필드만 사용
+        # Attribute definition - only standard LinkML fields
+        # title = original column name (case/whitespace preserved). Used for re-import matching
         attribute_def = {
             "name": safe_column_name,
+            "title": column_name,
             "description": f"Mapping for column: {column_name}",
             "range": range_value,
             "annotations": {
@@ -104,11 +107,11 @@ def generate_linkml_schema():
             }
         }
         
-        # exact_mappings 추가 (온톨로지 URI 목록)
+        # Add exact_mappings (list of ontology URIs)
         if exact_mapping_uris:
             attribute_def["exact_mappings"] = exact_mapping_uris
         
-        # 값 매핑이 있는 경우 comments에 추가 (LinkML 표준 필드)
+        # If there are value mappings, add them to comments (standard LinkML field)
         if column_name in st.session_state.value_ontology_mapping:
             value_comments = []
             for value, val_mappings in st.session_state.value_ontology_mapping[column_name].items():
@@ -126,7 +129,7 @@ def generate_linkml_schema():
         
         main_class["attributes"][safe_column_name] = attribute_def
     
-    # value_ontology_mapping만 있는 경우 (mapped_terms 없음)
+    # When only value_ontology_mapping exists (no mapped_terms)
     if not has_column_mappings and has_value_mappings:
         for column_name, value_dict in st.session_state.value_ontology_mapping.items():
             safe_column_name = column_name.replace(" ", "_").replace("-", "_").lower()
@@ -134,7 +137,7 @@ def generate_linkml_schema():
             value_comments = []
             exact_mapping_uris = []
             
-            # DataFrame에서 현재 데이터 타입 가져오기
+            # Get the current data type from the DataFrame
             data_type = get_column_data_type(column_name)
             
             for value, val_mappings in value_dict.items():
@@ -153,11 +156,12 @@ def generate_linkml_schema():
                     if uri and uri not in exact_mapping_uris:
                         exact_mapping_uris.append(uri)
             
-            # 데이터 타입 변환
+            # Convert the data type
             range_value = dtype_to_range(data_type)
             
             attribute_def = {
                 "name": safe_column_name,
+                "title": column_name,
                 "description": f"Value mapping for column: {column_name}",
                 "range": range_value,
                 "annotations": {
@@ -176,15 +180,100 @@ def generate_linkml_schema():
             
             main_class["attributes"][safe_column_name] = attribute_def
     
-    # 클래스 추가
+    # Add the class
     schema["classes"]["DataMapping"] = main_class
-    
+
+    # Structured block for round-trip re-import.
+    # The human-readable description/comments are left as-is; the exact,
+    # machine-readable mapping data is stored alongside as JSON in a
+    # schema-level annotation, so re-import doesn't need to parse free text.
+    schema["annotations"] = {
+        "maptology_mappings": {
+            "tag": "maptology_mappings",
+            "value": json.dumps(_build_roundtrip_payload(), ensure_ascii=False)
+        },
+        # Record WHICH ontology version each mapping was made against, so a file
+        # can be interpreted later even after the ontologies are updated.
+        "ontology_versions": {
+            "tag": "ontology_versions",
+            "value": json.dumps(_ontology_versions_used(), ensure_ascii=False)
+        }
+    }
+
     return schema
 
 
-# 값 매핑 정보를 포함한 확장 스키마 생성 (JSON 전용 - 검증 목적 아님)
+# 매핑에 사용된 온톨로지들의 버전 정보 / Versions of the ontologies used here.
+# Reads ontology_cache/ontology_versions.json (populated by version_check.py).
+# Returns {abbr: {version, released, submissionId}}; "unknown" if not recorded.
+def _ontology_versions_used():
+    used = set()
+    for m in st.session_state.mapped_terms:
+        abbr = m.get("Ontology Abbr")
+        if abbr:
+            used.add(abbr)
+    for value_dict in st.session_state.value_ontology_mapping.values():
+        for val_mappings in value_dict.values():
+            iterable = val_mappings if isinstance(val_mappings, list) else [val_mappings]
+            for vm in iterable:
+                if isinstance(vm, dict) and vm.get("Ontology Abbr"):
+                    used.add(vm["Ontology Abbr"])
+
+    versions_path = os.path.join("ontology_cache", "ontology_versions.json")
+    recorded = {}
+    if os.path.exists(versions_path):
+        try:
+            with open(versions_path, "r", encoding="utf-8") as f:
+                recorded = json.load(f)
+        except (ValueError, OSError):
+            recorded = {}
+
+    result = {}
+    for abbr in sorted(used):
+        info = recorded.get(abbr) or {}
+        result[abbr] = {
+            "version": info.get("version", "unknown"),
+            "released": info.get("released", "unknown"),
+            "submissionId": info.get("submissionId"),
+        }
+    return result
+
+
+# 재가져오기용 구조화 페이로드 생성 / Build the machine-readable round-trip payload
+def _build_roundtrip_payload():
+    column_mappings = []
+    for m in st.session_state.mapped_terms:
+        column_mappings.append({
+            "column": m.get("Original Label", ""),
+            "term_uri": m.get("Ontology Term URI", ""),
+            "label": m.get("Preferred Label", ""),
+            "ontology_abbr": m.get("Ontology Abbr", ""),
+            "definition": m.get("Definition", ""),
+            "data_type": get_column_data_type(m.get("Original Label", "")),
+        })
+
+    value_mappings = []
+    for column_name, value_dict in st.session_state.value_ontology_mapping.items():
+        for value, val_mappings in value_dict.items():
+            iterable = val_mappings if isinstance(val_mappings, list) else [val_mappings]
+            for vm in iterable:
+                if isinstance(vm, dict) and vm.get("Ontology Term URI"):
+                    value_mappings.append({
+                        "column": column_name,
+                        "value": value,
+                        "term_uri": vm.get("Ontology Term URI", ""),
+                        "label": vm.get("Preferred Label", ""),
+                        "ontology_abbr": vm.get("Ontology Abbr", ""),
+                        "definition": vm.get("Definition", ""),
+                        "data_type": get_column_data_type(column_name),
+                    })
+
+    return {"column_mappings": column_mappings, "value_mappings": value_mappings}
+
+
+# Generate an extended schema that includes value mappings (JSON only - not for validation)
 def generate_extended_schema():
-    """값 매핑 정보를 포함한 확장 스키마 (내부 사용/문서화 목적)"""
+    """Extended schema including value mappings (for internal use/documentation)."""
     has_column_mappings = bool(st.session_state.mapped_terms)
     has_value_mappings = bool(st.session_state.value_ontology_mapping)
     
@@ -198,7 +287,7 @@ def generate_extended_schema():
         "value_mappings": {}
     }
     
-    # 컬럼 매핑 정보
+    # Column mapping info
     for mapping in st.session_state.mapped_terms:
         column_name = mapping["Original Label"]
         if column_name not in schema["column_mappings"]:
@@ -216,7 +305,7 @@ def generate_extended_schema():
             "definition": mapping.get("Definition", "")
         })
     
-    # 값 매핑 정보
+    # Value mapping info
     for column_name, value_dict in st.session_state.value_ontology_mapping.items():
         if column_name not in schema["value_mappings"]:
             schema["value_mappings"][column_name] = {}
@@ -244,14 +333,14 @@ def generate_extended_schema():
     return schema
 
 
-# LinkML 스키마 다운로드 함수
+# LinkML schema download function
 def download_linkml_schema():
     schema = generate_linkml_schema()
     if schema:
-        # YAML로 변환
+        # Convert to YAML
         yaml_str = yaml.dump(schema, sort_keys=False, default_flow_style=False, allow_unicode=True)
         
-        # 다운로드 버튼 추가
+        # Add the download button
         st.download_button(
             "Download LinkML Schema (YAML)",
             data=yaml_str,
@@ -259,7 +348,7 @@ def download_linkml_schema():
             mime="text/yaml"
         )
         
-        # JSON 형식으로도 제공
+        # Also provide it in JSON format
         json_str = json.dumps(schema, indent=2)
         st.download_button(
             "Download Schema as JSON",
@@ -301,7 +390,7 @@ def generate_sssom_tsv():
     def add_prefix_from_uri(uri, prefix_map):
         uri = str(uri).strip()
 
-        # OBO 패턴 (http): http://purl.obolibrary.org/obo/HP_0000008
+        # OBO pattern (http): http://purl.obolibrary.org/obo/HP_0000008
         if uri.startswith("http://purl.obolibrary.org/obo/"):
             tail = uri.replace("http://purl.obolibrary.org/obo/", "", 1)
             if "_" in tail:
@@ -309,7 +398,7 @@ def generate_sssom_tsv():
                 if prefix and prefix not in prefix_map:
                     prefix_map[prefix] = f"http://purl.obolibrary.org/obo/{prefix}_"
 
-        # OBO 패턴 (https): https://purl.obolibrary.org/obo/HP_0000008
+        # OBO pattern (https): https://purl.obolibrary.org/obo/HP_0000008
         elif uri.startswith("https://purl.obolibrary.org/obo/"):
             tail = uri.replace("https://purl.obolibrary.org/obo/", "", 1)
             if "_" in tail:
@@ -317,7 +406,7 @@ def generate_sssom_tsv():
                 if prefix and prefix not in prefix_map:
                     prefix_map[prefix] = f"https://purl.obolibrary.org/obo/{prefix}_"
 
-        # BioPortal 패턴: http://purl.bioontology.org/ontology/SNOMEDCT/410607006
+        # BioPortal pattern: http://purl.bioontology.org/ontology/SNOMEDCT/410607006
         elif uri.startswith("http://purl.bioontology.org/ontology/"):
             tail = uri.replace("http://purl.bioontology.org/ontology/", "", 1)
             if "/" in tail:
@@ -325,7 +414,7 @@ def generate_sssom_tsv():
                 if prefix and prefix not in prefix_map:
                     prefix_map[prefix] = f"http://purl.bioontology.org/ontology/{prefix}/"
 
-        # BioPortal data 패턴: https://data.bioontology.org/ontologies/...
+        # BioPortal data pattern: https://data.bioontology.org/ontologies/...
         elif uri.startswith("https://data.bioontology.org/ontologies/"):
             tail = uri.replace("https://data.bioontology.org/ontologies/", "", 1)
             if "/" in tail:
@@ -333,12 +422,12 @@ def generate_sssom_tsv():
                 if prefix and prefix not in prefix_map:
                     prefix_map[prefix] = f"http://purl.bioontology.org/ontology/{prefix}/"
 
-        # NCIT 패턴: http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#C93501
+        # NCIT pattern: http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#C93501
         elif uri.startswith("http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#"):
             if "ncit" not in prefix_map:
                 prefix_map["ncit"] = "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#"
 
-        # EBI/EFO 패턴: http://www.ebi.ac.uk/efo/EFO_0020103
+        # EBI/EFO pattern: http://www.ebi.ac.uk/efo/EFO_0020103
         elif uri.startswith("http://www.ebi.ac.uk/efo/"):
             tail = uri.replace("http://www.ebi.ac.uk/efo/", "", 1)
             if "_" in tail:
@@ -346,7 +435,7 @@ def generate_sssom_tsv():
                 if prefix and prefix not in prefix_map:
                     prefix_map[prefix] = f"http://www.ebi.ac.uk/efo/{prefix}_"
 
-        # Identifiers.org 패턴: http://identifiers.org/xxx/12345
+        # Identifiers.org pattern: http://identifiers.org/xxx/12345
         elif uri.startswith("http://identifiers.org/"):
             tail = uri.replace("http://identifiers.org/", "", 1)
             if "/" in tail:
