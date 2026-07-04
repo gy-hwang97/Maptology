@@ -203,3 +203,6 @@ benchmark_text2term_vs_maptology.py
 Benchmark_formats.py
 SSSOM_validator.py
 text2term_practice.py
+
+# Understand-Anything code-analysis output (local tooling artifact, not app code)
+.understand-anything/
