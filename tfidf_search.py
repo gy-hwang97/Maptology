@@ -120,6 +120,34 @@ def _load_ontology_data(acronym):
 
 
 # ============================================================
+# Look up a single term by its IRI (used by mapping re-import)
+# ============================================================
+
+def get_term_by_iri(acronym, iri):
+    """Return the cached term dict (label, iri, synonyms, definition) for one
+    IRI within the given ontology, or None if not found.
+
+    Builds a per-ontology IRI index on first use so repeated lookups are O(1).
+    Used on import to refresh a saved mapping's label/definition from the
+    current local OWL cache rather than trusting possibly-outdated file values.
+    """
+    if not acronym or not iri:
+        return None
+    data = _load_ontology_data(acronym)
+    if data is None:
+        return None
+    index = data.get("iri_index")
+    if index is None:
+        index = {}
+        for term in data["terms"]:
+            term_iri = term.get("iri")
+            if term_iri and term_iri not in index:
+                index[term_iri] = term
+        data["iri_index"] = index
+    return index.get(iri)
+
+
+# ============================================================
 # Main search function (replaces BioPortal API search)
 # ============================================================
 
@@ -197,7 +225,11 @@ def search_local(search_term, selected_ontologies, top_n=10):
             result["Synonyms"] = synonyms
             result["Ontology URI"] = "https://bioportal.bioontology.org/ontologies/" + acronym
             result["Ontology Term URI"] = iri
-            result["Mapping Score"] = round(score, 3)
+            # Keep the RAW similarity as the sort key. Rounding here (e.g. to 3
+            # decimals) would create artificial ties that then get ordered by
+            # Preferred Label, which can change the Top-10 boundary. The score is
+            # never displayed, so there is no reason to round it.
+            result["Mapping Score"] = float(score)
 
             all_results.append(result)
 
