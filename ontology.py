@@ -73,14 +73,21 @@ def search_ontology(selected_column):
         # Sort by relevance (TF-IDF cosine similarity), highest first
         df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
         st.session_state.ontology_results = df_results
-        st.session_state.filtered_ontology_results = df_results
+        # The auto-suggestion list shows the TOP 10 overall. search_local returns
+        # up to 10 PER ontology, so with several ontologies selected the combined
+        # set is larger - keep only the 10 best distinct terms.
+        st.session_state.filtered_ontology_results = (
+            df_results.drop_duplicates(subset=["Ontology Term URI"], keep="first").head(10)
+        )
 
         # Reset selected term index if it's out of range
         if (st.session_state.selected_term_index is not None and
             st.session_state.selected_term_index >= len(df_results)):
             st.session_state.selected_term_index = None
     else:
-        st.warning("No results found. Try a different search term or select different ontologies.")
+        # Automatic search: no match is not an error - stay silent so users
+        # are not told "no results" for a search they did not run. They can
+        # still type keywords in the manual search box.
         st.session_state.ontology_results = None
         st.session_state.filtered_ontology_results = None
 
@@ -106,9 +113,12 @@ def search_ontology_for_value(selected_value):
     if df_results is not None and len(df_results) > 0:
         # Sort by relevance (TF-IDF cosine similarity), highest first
         df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
-        st.session_state.value_ontology_results = df_results
+        # Auto-suggestion list: keep only the top 10 overall (see search_ontology).
+        st.session_state.value_ontology_results = (
+            df_results.drop_duplicates(subset=["Ontology Term URI"], keep="first").head(10)
+        )
     else:
-        st.warning("No results found for value '" + str(selected_value) + "'. Try a different search term or select different ontologies.")
+        # Automatic value search: stay silent on no match (see search_ontology).
         st.session_state.value_ontology_results = None
 
 
@@ -186,8 +196,10 @@ def search_bioportal_manual_value(search_term):
     # Clean up search term
     search_term = str(search_term).strip()
 
-    # Search using local TF-IDF
-    df_results = search_local(search_term, st.session_state.selected_ontologies)
+    # Search using local TF-IDF. Fetch more per ontology (top_n=20) so that after
+    # we drop terms already shown in the auto list, enough candidates remain to
+    # show ~10.
+    df_results = search_local(search_term, st.session_state.selected_ontologies, top_n=20)
 
     if df_results is not None and len(df_results) > 0:
         # Sort by relevance (TF-IDF cosine similarity), highest first
@@ -213,8 +225,10 @@ def search_bioportal_manual_column(search_term):
     # Clean up search term
     search_term = str(search_term).strip()
 
-    # Search using local TF-IDF
-    df_results = search_local(search_term, st.session_state.selected_ontologies)
+    # Search using local TF-IDF. Fetch more per ontology (top_n=20) so that after
+    # we drop terms already shown in the auto list, enough candidates remain to
+    # show ~10.
+    df_results = search_local(search_term, st.session_state.selected_ontologies, top_n=20)
 
     if df_results is not None and len(df_results) > 0:
         # Sort by relevance (TF-IDF cosine similarity), highest first
@@ -231,6 +245,9 @@ def search_bioportal_manual_column(search_term):
 def select_none_ontologies():
     st.session_state.selected_ontologies = []
     st.session_state.ontologies_changed = True
+    # Programmatic change -> refresh the ontology checkboxes so they don't keep
+    # their stale (checked) widget state.
+    st.session_state.ontology_widget_version = st.session_state.get("ontology_widget_version", 0) + 1
     st.rerun()
 
 
@@ -291,7 +308,7 @@ def render_ontology_selection(available_ontologies):
                 checkbox = st.checkbox(
                     acronym + " - " + name,
                     value=is_checked,
-                    key="ont_" + acronym,
+                    key="ont_" + acronym + "_" + str(st.session_state.get("ontology_widget_version", 0)),
                     help=tooltip,
                     disabled=is_disabled
                 )
@@ -312,6 +329,13 @@ def render_ontology_selection(available_ontologies):
                 # Description for disabled checkboxes
                 if is_disabled:
                     st.caption("Remove other selections to enable this option")
+
+    # When the selected ontologies change, previous manual search results may be
+    # from ontologies that are no longer selected - clear them so stale results
+    # don't linger (e.g. NCIT results still showing after NCIT was deselected).
+    if st.session_state.ontologies_changed:
+        st.session_state.manual_column_search_results = None
+        st.session_state.manual_value_search_results = None
 
     # Automatically execute search if ontology changed and column is selected
     if st.session_state.ontologies_changed and st.session_state.selected_column and st.session_state.selected_ontologies:
