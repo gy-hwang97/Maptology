@@ -7,7 +7,7 @@ from ontology import render_ontology_selection, get_available_ontologies, search
 from column_mapping import render_column_mapping_section
 from value_mapping import render_value_mapping_section
 from mapping_display import render_mapped_terms, render_value_mappings, render_download_buttons
-from loading_overlay import show_loading_overlay
+from mapping_import import render_import_section
 
 # Streamlit basic page configuration
 st.set_page_config(page_title='Maptology', layout='wide')
@@ -29,8 +29,16 @@ st.caption("Maptology helps you search and map ontology terms to your dataset co
 # Step 1: File Upload (no API key needed)
 # =============================================================================
 
-st.write("### Step 1: Upload File")
-uploaded_file = st.file_uploader("Drag and drop or browse files", type=["csv", "tsv", "xlsx", "xls"], label_visibility="collapsed")
+st.write("### Step 1: Upload Data File")
+# A stable key keeps the uploaded file across reruns. Without it, adding other
+# widgets/sections can shift this keyless widget's identity and Streamlit resets
+# its value to None on a rerun (which would wipe the whole session).
+uploaded_file = st.file_uploader(
+    "Drag and drop or browse files",
+    type=["csv", "tsv", "xlsx", "xls"],
+    label_visibility="collapsed",
+    key="main_file_uploader",
+)
 
 # Check if file changed and reset session state
 if 'current_file_name' not in st.session_state:
@@ -57,12 +65,14 @@ if uploaded_file:
         st.session_state.column_states = {}
         st.session_state.selected_ontologies = []
         st.session_state.column_data_types = {}
-
-    # Process file with loading overlay
-    loading_container = st.empty()
-
-    with loading_container:
-        show_loading_overlay("Loading...")
+        # Clear imported-mapping state and reset the import uploader widget
+        st.session_state.imported_mapping_name = None
+        st.session_state.imported_mapping_hash = None
+        st.session_state.import_report = None
+        st.session_state.mapping_uploader_seq = st.session_state.get('mapping_uploader_seq', 0) + 1
+        # Force checkbox widgets to re-render fresh (mappings were cleared)
+        st.session_state.mapping_version = st.session_state.get('mapping_version', 0) + 1
+        st.session_state.ontology_widget_version = st.session_state.get('ontology_widget_version', 0) + 1
 
     try:
         # Read file based on format
@@ -81,14 +91,10 @@ if uploaded_file:
         df.index = range(1, len(df) + 1)
         st.session_state.uploaded_df = df
 
-        # Remove loading overlay
-        loading_container.empty()
-
         # File processing completion message
         st.success("File uploaded successfully! Found " + str(len(df)) + " rows and " + str(len(df.columns)) + " columns.")
 
     except Exception as e:
-        loading_container.empty()
         st.error("Error processing file: " + str(e))
         st.stop()
 
@@ -111,50 +117,48 @@ if uploaded_file:
     else:
         st.dataframe(st.session_state.uploaded_df.head(20), width='stretch', hide_index=False)
 
-    # Ontology selection section
+    # Load the ontology catalog up front (silently). It must be available BEFORE
+    # the import step so an imported file can auto-select the ontologies it uses.
     if not st.session_state.available_ontologies:
-        ontology_loading_container = st.empty()
-
-        with ontology_loading_container:
-            show_loading_overlay("Loading ontologies...")
-
         available_ontologies = get_available_ontologies()
         st.session_state.available_ontologies = available_ontologies
-
-        ontology_loading_container.empty()
     else:
         available_ontologies = st.session_state.available_ontologies
 
-    if available_ontologies:
-        st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
-
-        st.write("### Step 3: Select Ontologies")
-        st.caption("Select one or more ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
-
-        render_ontology_selection(available_ontologies)
-    else:
+    if not available_ontologies:
         st.error("Failed to load ontologies. Please check that the ontology cache has been built.")
         st.stop()
 
-    # Column selection and ontology mapping section
+    # Step 3: import previously-exported mappings (LinkML / SSSOM). Only available
+    # once a data file is loaded; kept mappings are filtered to the current data
+    # file's columns/values, and the ontologies they use are auto-selected below.
+    render_import_section()
+
+    # Step 4: select / add the ontologies to search. Any ontology auto-selected by
+    # the import above is already checked here.
+    st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
+    st.write("### Step 4: Select Ontologies")
+    st.caption("Select one or more ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
+    render_ontology_selection(available_ontologies)
+
+    # Column selection and ontology mapping section (requires ontologies)
     if st.session_state.selected_ontologies:
         render_column_mapping_section()
-
-        # Mapped Ontology Terms - displayed right after column mapping
-        if st.session_state.mapped_terms:
-            render_mapped_terms()
 
         # Section for mapping values to ontology terms
         if st.session_state.selected_column and st.session_state.uploaded_df is not None:
             render_value_mapping_section()
 
-        # Unique Values' Ontology Terms - displayed right after value mapping
-        if st.session_state.value_ontology_mapping:
-            render_value_mappings()
+    # Results tables and downloads - shown whenever mappings exist, whether
+    # they came from a search or from an imported file.
+    if st.session_state.mapped_terms:
+        render_mapped_terms()
 
-        # Download buttons
-        if st.session_state.mapped_terms or st.session_state.value_ontology_mapping:
-            render_download_buttons()
+    if st.session_state.value_ontology_mapping:
+        render_value_mappings()
+
+    if st.session_state.mapped_terms or st.session_state.value_ontology_mapping:
+        render_download_buttons()
 
 else:
     # Reset when file is removed
@@ -177,6 +181,14 @@ else:
         st.session_state.column_states = {}
         st.session_state.selected_ontologies = []
         st.session_state.column_data_types = {}
+        # Clear imported-mapping state and reset the import uploader widget
+        st.session_state.imported_mapping_name = None
+        st.session_state.imported_mapping_hash = None
+        st.session_state.import_report = None
+        st.session_state.mapping_uploader_seq = st.session_state.get('mapping_uploader_seq', 0) + 1
+        # Force checkbox widgets to re-render fresh (mappings were cleared)
+        st.session_state.mapping_version = st.session_state.get('mapping_version', 0) + 1
+        st.session_state.ontology_widget_version = st.session_state.get('ontology_widget_version', 0) + 1
         st.rerun()
 
 st.write("---")
