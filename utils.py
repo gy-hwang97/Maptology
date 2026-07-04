@@ -94,6 +94,32 @@ def initialize_session():
     if 'manual_value_checkbox_counter' not in st.session_state:
         st.session_state.manual_value_checkbox_counter = 0
 
+    # 매핑 파일 가져오기 상태 / Imported-mapping state
+    if 'imported_mapping_name' not in st.session_state:
+        st.session_state.imported_mapping_name = None
+    if 'import_report' not in st.session_state:
+        st.session_state.import_report = None
+    if 'mapping_uploader_seq' not in st.session_state:
+        st.session_state.mapping_uploader_seq = 0
+
+    # 체크박스 단일 진실원천용 버전 카운터 / Bumped on every mapping change so
+    # checkbox widgets re-render from the mapping instead of stale widget state
+    if 'mapping_version' not in st.session_state:
+        st.session_state.mapping_version = 0
+
+    # 온톨로지 체크박스 위젯 버전 / Bumped on every PROGRAMMATIC change to the
+    # ontology selection (import auto-select, Select None, file upload/remove) so
+    # the ontology checkboxes re-render from selected_ontologies instead of stale
+    # widget state. NOT bumped on a manual checkbox toggle.
+    if 'ontology_widget_version' not in st.session_state:
+        st.session_state.ontology_widget_version = 0
+
+    # 가져온 매핑 파일의 내용 해시 / Content hash of the last-imported mapping file
+    # (compared instead of the filename, so a different file with the same name
+    # is still re-imported).
+    if 'imported_mapping_hash' not in st.session_state:
+        st.session_state.imported_mapping_hash = None
+
 # API 키 가져오기 함수 / Get API key function
 def get_api_key():
     return st.session_state.get('api_key', None)
@@ -252,6 +278,19 @@ def add_css():
         font-weight: bold !important;
         margin-top: 10px;
         margin-bottom: 5px;
+    }
+    /* Ontology column values are rendered as DISABLED tertiary buttons (only to
+       align them on the same row as the checkbox / ℹ️). Show their text in the
+       normal text color instead of the faded 'disabled' grey, so they match the
+       Term column values. Only disabled tertiary buttons are affected. */
+    button[kind="tertiary"]:disabled,
+    button[kind="tertiary"]:disabled *,
+    [data-testid="stBaseButton-tertiary"]:disabled,
+    [data-testid="stBaseButton-tertiary"]:disabled * {
+        color: var(--text-color, rgb(49, 51, 63)) !important;
+        -webkit-text-fill-color: var(--text-color, rgb(49, 51, 63)) !important;
+        opacity: 1 !important;
+        cursor: default !important;
     }
     </style>
     """, unsafe_allow_html=True)
