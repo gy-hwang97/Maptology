@@ -7,7 +7,7 @@ from mapping import remove_mapping, remove_value_mapping
 from schema import generate_linkml_schema, generate_sssom_tsv
 from utils import get_column_data_type
 
-# 매핑된 용어 섹션 렌더링
+# Render the mapped-terms section
 def render_mapped_terms():
     st.markdown('<div class="sub-heading">Mapped Ontology Terms</div>', unsafe_allow_html=True)
     st.caption("This table shows all the ontology terms you have mapped to your columns. You can view term details or remove mappings.")
@@ -24,7 +24,7 @@ def render_mapped_terms():
     
     st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
     
-    # 각 매핑을 개별적으로 표시
+    # Display each mapping individually
     for idx, mapping in enumerate(st.session_state.mapped_terms):
         column_name = mapping['Original Label']
         
@@ -56,7 +56,7 @@ def render_mapped_terms():
         
         st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
 
-# 값-온톨로지 매핑 정보 표시
+# Display value-to-ontology mapping info
 def render_value_mappings():
     st.markdown('<div class="sub-heading">Unique Values\' Ontology Terms</div>', unsafe_allow_html=True)
     st.caption("This table shows the ontology terms mapped to specific data values within your columns. Each row represents a value-to-term mapping that you have created.")
@@ -144,9 +144,9 @@ def render_value_mappings():
                 st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
                 mapping_idx += 1
 
-# 다운로드 버튼 렌더링
+# Render the download buttons
 def render_download_buttons():
-    st.write("### Step 6: Download Results")
+    st.write("### Step 7: Download Results")
     st.caption("Export your mapping results in various formats for use in other applications or for record keeping.")
     
     col1, col2, col3 = st.columns(3)
