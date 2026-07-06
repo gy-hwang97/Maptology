@@ -1,97 +1,45 @@
-<p align="left">
-  <img src="maptology.png" alt="Maptology logo" width="220">
-</p>
+<img src="maptology.png" alt="Maptology logo" width="220">
 
-# Maptology
+# What is Maptology?<
 
-<p align="left">
-  <strong>Map your dataset to standardized ontology terms</strong><br>
-  <a href="https://maptology.streamlit.app/">Link</a>
-</p>
+**Maptology** is a Web-based application, written using the Python-based Streamlit framework, that is used to map tabular data files to ontology terms. It addresses a problem in many disciplines in which tabular files typically lack semantic information and thus may be difficult to interpret and reuse. By facilitating the process of mapping column names and categorical data values to ontology terms, Maptology makes data more interoperable and thus more reusable by others.
 
----
+To illustrate, consider a scenario that our team often faces. We study data from cancer patients, and we often reuse datasets that others have shared in the public domain. In one study, a researcher might store each study participant's biological sex in a column named `Gender` or even something more generic like `characteristic_1`. By examining the data in this column, we can often infer that the values refer to biological sex (which is frequently conflated with gender). Rather than modifying the column name itself, which could cause confusion about [data provenance](https://en.wikipedia.org/wiki/Data_lineage#Data_provenance), we could provide a companion document that indicates the semantic meaning of this column name. For example, we might use the [biological sex](http://purl.obolibrary.org/obo/PATO_0000047) term from the [Experimental Factor Ontology](https://en.wikipedia.org/wiki/Experimental_factor_ontology). Data values in this column might include "F", "M", "female", "male", "non-binary", etc. A human examining these values might be able to infer what they mean based on intuition. However, assigning ontology terms would make the data more explicit and avoid ambiguity. By mapping an ontology term to each unique value, it becomes possible for humans and computers to infer data semantics.
 
-<h2>What is Maptology?</h2>
+Even if a dataset is *not* being shared with others, mapping the data to ontology terms is valuable because it creates explicit, machine-readable documentation that benefits the original researchers and others on their team. Researchers inevitably revisit datasets months or years later, projects change hands, and analyses are combined across studies. Recording the intended meaning of columns and their values reduces ambiguity, improves reproducibility, and makes it easier to integrate data from multiple sources.
 
-**Maptology** is a Streamlit app that maps your dataset's columns/values to standardized **ontology terms**, making your data consistent, interoperable, and easier to analyze and share.
+Rather than embedding these annotations directly into a tabular data file, researchers can store them in companion files using community standards such as the [LinkML](https://linkml.io) specification and the [Simple Standard for Sharing Ontological Mappings (SSSOM)](https://mapping-commons.github.io/sssom/dev) specification.
 
-<h3>Why use it?</h3>
+Maptology enables researchers to import tabular data files, choose one or more ontologies, map column names and data values to terms within the selected ontologies, specify the basic data type (e.g., categorical, numeric, date/time), and export this information as LinkML and/or SSSOM files. In doing so, it uses the [TF/IDF methodology](https://en.wikipedia.org/wiki/Tf%E2%80%93idf) to suggest mappings and enables the user to employ their domain expertise to accept or reject suggested mappings and to perform custom searches. These searches are fast, even for large ontologies. No coding is required by the user. Additionally, one feature that Maptology supports is the ability to map multiple ontology terms to the a particular column name or data value. This is important because in many instances, a single ontology term is not descriptive enough on its own.
 
-- **FAIR & interoperable:** Normalize free-text into ontology IDs/labels  
-- **Fast:** Point-and-click mapping, no code required
-- **Reusable:** Export mappings for future datasets
+Although other tools exist for mapping text to ontology terms (e.g., [text2term](https://github.com/rsgoncalves/text2term), [Zooma](https://www.ebi.ac.uk/spot/zooma/), [BioPortal Annotator](https://bioportal.bioontology.org/annotator)), these are designed for free text, while Maptology is designed specifically for tabular files which are ubiquitious in research.
 
-<h3>How it works</h3>
+## How it works
 
-<h4>1. Upload your data</h4>
-Upload a CSV file (e.g., *Obesity_prediction.csv*)
+#### 1. Upload your data<
 
-<h4>2. Map columns to schema fields</h4>
-Connect your dataset columns to standardized schema properties
+Upload a data file (supported formats: CSV, TSV, Excel)
 
-<h4>3. Map values to ontology terms</h4>
-Link your data values to official ontology identifiers and labels
+#### 2. Map column names
 
-<h4>4. Review & export</h4>
-Validate mappings and download your standardized dataset
+Map your dataset columns to standardized ontology terms.
 
----
+#### 3. Map data values
 
-<h2>Use Cases</h2>
+Link your data values to official ontology identifiers, labels, and definitions.
 
-- **Research Data** — Standardize clinical and biological datasets
-- **Healthcare** — Normalize patient records and medical terminologies  
-- **Analytics** — Prepare inconsistent data for analysis
-- **Data Integration** — Merge datasets from different sources
+#### 4. Review & export
 
----
+Validate and download the mappings in LinkML and/or SSSOM formats.
 
 <h2>Getting Started</h2>
 
-### **Prerequisites**
-Streamlit currently supports versions 3.9, 3.10, 3.11, 3.12, 3.13, and 3.14 of Python
+Maptology can be accessed for free by visiting our [demo site](https://bioapps.byu.edu/Maptology). No installation is required other than a Web browser.
 
-Before using Maptology, you need a **free BioPortal API key**:
+Alternatively, Maptology can be run on a local computer. Maptology is available va [PyPi](https://TODO). Versions 3.9+ of Python are supported. To start the app, run `streamlit run main.py`. If that doesn't work, try one of these commands:
 
-1. Visit https://bioportal.bioontology.org/
-2. Create a free account  
-3. Go to "Account" → "API Key" to get your key
-4. Copy your API key for use in the app
+  - `python -m streamlit run main.py`
+  - `python3 -m streamlit run main.py`
+  - `py -m streamlit run main.py`
 
-### **Using the Web App**
-**Link:** https://maptology.streamlit.app/
-
-1. Visit the app and enter your BioPortal API key
-2. Upload your CSV file
-3. Follow the guided mapping process to transform your data into a standardized format
-
-### For Local Users
-To run Maptology locally:
-
-1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Run: `streamlit run main.py`
-   - If that doesn't work, try one of these:
-     - `python -m streamlit run main.py`
-     - `python3 -m streamlit run main.py`
-     - `py -m streamlit run main.py`
-
-**Tip:** To skip entering your API key every time:
-1. Open `utils.py`
-2. Find: `API_KEY = ""`
-3. Change to: `API_KEY = "your-api-key-here"`
-
-⚠️ **Warning:** Never commit your API key to public repositories!
-
----
-
-<h2>Important Note</h2>
-
-> **Hosted Service Only**  
-> Maptology is designed as a web service. Local runs are disabled by design to ensure optimal performance and security.
-
----
-
-<h2>License</h2>
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Another option is to run the app via a Docker container. To do so, TODO.

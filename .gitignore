@@ -208,3 +208,4 @@ text2term_practice.py
 .understand-anything/
 
 .DS_Store
+.devcontainer/
