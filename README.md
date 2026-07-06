@@ -16,7 +16,7 @@ Although other tools exist for mapping text to ontology terms (e.g., [text2term]
 
 ## How it works
 
-#### 1. Upload your data<
+#### 1. Upload your data
 
 Upload a data file (supported formats: CSV, TSV, Excel)
 
