@@ -4,7 +4,7 @@ import urllib.parse
 import yaml
 import json
 from mapping import remove_mapping, remove_value_mapping
-from schema import generate_linkml_schema, generate_sssom_tsv
+from schema import generate_linkml_schema, generate_sssom_tsv, data_type_term
 from utils import get_column_data_type
 
 # Render the mapped-terms section
@@ -155,13 +155,15 @@ def render_download_buttons():
         column_mappings_list = []
         for mapping in st.session_state.mapped_terms:
             column_name = mapping['Original Label']
+            column_dtype = get_column_data_type(column_name)
             column_mappings_list.append({
                 "Column Name": column_name,
                 "Preferred Label": mapping['Preferred Label'],
                 "Ontology Name": mapping['Ontology Name'],
                 "Ontology URI": mapping['Ontology URI'],
                 "Ontology Term URI": mapping['Ontology Term URI'],
-                "Data Type": get_column_data_type(column_name),
+                "Data Type": column_dtype,
+                "Data Type Term URI": data_type_term(column_dtype)[1],
                 "Definition": mapping.get('Definition', '')
             })
         
@@ -186,6 +188,7 @@ def render_download_buttons():
         value_mappings_list = []
         for column, value_dict in st.session_state.value_ontology_mapping.items():
             current_dtype = get_column_data_type(column)
+            current_dtype_uri = data_type_term(current_dtype)[1]
             for value, val_mappings in value_dict.items():
                 if isinstance(val_mappings, list):
                     for val_mapping in val_mappings:
@@ -197,6 +200,7 @@ def render_download_buttons():
                             "Ontology URI": val_mapping["Ontology URI"],
                             "Ontology Term URI": val_mapping["Ontology Term URI"],
                             "Data Type": current_dtype,
+                            "Data Type Term URI": current_dtype_uri,
                             "Definition": val_mapping.get("Definition", "")
                         })
                 else:
@@ -208,6 +212,7 @@ def render_download_buttons():
                         "Ontology URI": val_mappings["Ontology URI"],
                         "Ontology Term URI": val_mappings["Ontology Term URI"],
                         "Data Type": current_dtype,
+                        "Data Type Term URI": current_dtype_uri,
                         "Definition": val_mappings.get("Definition", "")
                     })
         
