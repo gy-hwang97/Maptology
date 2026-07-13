@@ -8,7 +8,10 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+# build/ holds this project's data-prep scripts, so only the packaging output
+# directories inside it are ignored - not the whole folder.
+build/lib/
+build/bdist.*/
 develop-eggs/
 dist/
 downloads/
