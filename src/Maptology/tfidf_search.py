@@ -11,9 +11,12 @@ from scipy import sparse
 from sklearn.metrics.pairwise import linear_kernel
 
 
-# Path settings
-CACHE_DIR = "tfidf_cache"
-TSV_FILE = "ontology_cache/ontology_list.tsv"
+# Path settings. Resolved against the repo root (this file lives in
+# src/Maptology/) rather than the current working directory, so the caches are
+# found no matter which directory the app is launched from.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CACHE_DIR = os.path.join(_REPO_ROOT, "tfidf_cache")
+TSV_FILE = os.path.join(_REPO_ROOT, "ontology_cache", "ontology_list.tsv")
 
 
 # ============================================================
