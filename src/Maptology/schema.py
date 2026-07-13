@@ -41,6 +41,17 @@ def data_type_term(data_type):
     return label, SCHEMA_ORG_NS + label
 
 
+def data_type_from_term(term):
+    """Inverse of data_type_term(): a schema.org term back to a Maptology data
+    type. Accepts a full URI ("http://schema.org/Text"), a CURIE ("schema:Text")
+    or a bare label ("Text"). Returns "" if it is not a known data type."""
+    label = str(term or "").strip().rsplit("/", 1)[-1].split(":")[-1]
+    for data_type, term_label in DATA_TYPE_TERMS.items():
+        if term_label.lower() == label.lower():
+            return data_type
+    return ""
+
+
 # Convert a friendly data type to a LinkML range
 def dtype_to_range(data_type):
     """Convert a Data Type string to a LinkML range value."""

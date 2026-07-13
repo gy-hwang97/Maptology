@@ -30,16 +30,21 @@ import pandas as pd
 import streamlit as st
 import yaml
 
+from schema import data_type_from_term
 from tfidf_search import get_ontology_list_from_tsv
 
 
 # SSSOM rows that record a column's basic data type (a schema.org term) use this
-# predicate. They are NOT ontology terms the user selected, so re-import must skip
-# them rather than treat them as mappings. Kept lowercase for comparison.
+# predicate. They are NOT ontology terms the user selected, so re-import must not
+# treat them as mappings - the data type is recovered from them instead. Kept
+# lowercase for comparison.
 _DATA_TYPE_PREDICATES = {
     "rdfs:range",
     "http://www.w3.org/2000/01/rdf-schema#range",
 }
+
+# The data types the app offers. An imported type outside this set is ignored.
+_VALID_DATA_TYPES = {"String", "Float", "Integer", "Boolean", "Date", "Datetime", "Time"}
 
 
 # ============================================================
@@ -198,6 +203,7 @@ def parse_sssom(text):
 
     col_recs = []
     val_recs = []
+    data_types = {}  # column -> data type, recovered from the rdfs:range rows
     for _, row in df.iterrows():
         subject_id = str(row.get("subject_id", ""))
         subject_label = str(row.get("subject_label", ""))
@@ -206,9 +212,13 @@ def parse_sssom(text):
         predicate_id = str(row.get("predicate_id", "")).strip().lower()
 
         # rdfs:range rows carry the column's basic data type (a schema.org term),
-        # not an ontology term the user selected. Skip them, otherwise re-import
-        # would turn the data type into a bogus mapping (e.g. sex -> schema:Text).
+        # not an ontology term the user selected. Recover the data type from them
+        # and skip the row - otherwise re-import would turn the data type into a
+        # bogus mapping (e.g. sex -> schema:Text).
         if predicate_id in _DATA_TYPE_PREDICATES:
+            data_type = data_type_from_term(object_id) or data_type_from_term(object_label)
+            if subject_label and data_type:
+                data_types[subject_label] = data_type
             continue
 
         term_uri = _expand_curie(object_id, curie_map)
@@ -243,6 +253,13 @@ def parse_sssom(text):
                 "definition": "",
                 "data_type": "",
             })
+
+    # Attach the data type recovered from the rdfs:range rows to that column's
+    # records, so re-import can restore the type the user had chosen.
+    for r in col_recs:
+        r["data_type"] = data_types.get(r["column"], "")
+    for r in val_recs:
+        r["data_type"] = data_types.get(r["column"], "")
     return col_recs, val_recs
 
 
@@ -434,6 +451,47 @@ def _auto_select_ontologies(kept_cols, kept_vals):
 
 
 # ============================================================
+# Restore the data type the user had chosen
+# ============================================================
+
+def _restore_data_types(records):
+    """Restore each imported column's data type.
+
+    column_data_types is the single source of truth for the data type. An imported
+    type is applied only if it is one of the app's types AND is compatible with the
+    current data (validate_type_change); otherwise the auto-detected type is kept
+    and the column is reported so the user can be warned.
+
+    The Data Type selectbox is built later in the run (Step 5) and remembers its own
+    previous value, so its widget state is synced here - BEFORE that widget exists -
+    otherwise it would overwrite the restored type with the remembered one.
+
+    mapped_terms, mapping_version and the term checkboxes are NOT touched."""
+    from utils import validate_type_change
+
+    applied = []
+    rejected = []
+    seen = set()
+    for r in records:
+        column = r.get("column")
+        data_type = str(r.get("data_type") or "").strip()
+        if not column or column in seen or data_type not in _VALID_DATA_TYPES:
+            continue
+        seen.add(column)
+        if st.session_state.column_data_types.get(column) == data_type:
+            continue
+        is_valid, _msg = validate_type_change(column, data_type)
+        if not is_valid:
+            rejected.append(str(column) + " -> " + data_type)
+            continue
+        st.session_state.column_data_types[column] = data_type
+        # Sync the Data Type selectbox before Step 5 creates it.
+        st.session_state["col_info_dtype_" + str(column)] = data_type
+        applied.append(str(column))
+    return applied, rejected
+
+
+# ============================================================
 # UI
 # ============================================================
 
@@ -482,6 +540,7 @@ def render_import_section():
             )
             apply_mappings(kept_cols, kept_vals)
             unknown_onts, overflow_onts = _auto_select_ontologies(kept_cols, kept_vals)
+            applied_types, rejected_types = _restore_data_types(kept_cols + kept_vals)
 
             st.session_state.imported_mapping_hash = file_hash
             st.session_state.imported_mapping_name = uploaded.name
@@ -493,6 +552,8 @@ def render_import_section():
                 "dropped_vals": [str(r["column"]) + " = " + str(r["value"]) for r in dropped_vals],
                 "unknown_onts": unknown_onts,
                 "overflow_onts": overflow_onts,
+                "applied_types": applied_types,
+                "rejected_types": rejected_types,
             }
 
     report = st.session_state.get("import_report")
@@ -529,4 +590,14 @@ def render_import_section():
                 "Some ontologies used by the file were not auto-selected ("
                 + "; ".join(parts)
                 + "). Select them manually in Step 4 if you need them."
+            )
+
+        rejected_types = report.get("rejected_types") or []
+        if rejected_types:
+            st.warning(
+                "The data type saved in the file does not fit this data file for "
+                + str(len(rejected_types)) + " column(s) ["
+                + ", ".join(rejected_types[:8])
+                + ("..." if len(rejected_types) > 8 else "")
+                + "]. The automatically detected type was kept instead."
             )
