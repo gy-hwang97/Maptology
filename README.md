@@ -36,10 +36,10 @@ Validate and download the mappings in LinkML and/or SSSOM formats.
 
 Maptology can be accessed for free by visiting our [demo site](https://bioapps.byu.edu/Maptology). No installation is required other than a Web browser.
 
-Alternatively, Maptology can be run on a local computer. Maptology is available va [PyPi](https://TODO). Versions 3.9+ of Python are supported. To start the app, run `streamlit run main.py`. If that doesn't work, try one of these commands:
+Alternatively, Maptology can be run on a local computer. Maptology is available va [PyPi](https://TODO). Versions 3.9+ of Python are supported. To start the app, run `streamlit run src/Maptology/main.py`. If that doesn't work, try one of these commands:
 
-  - `python -m streamlit run main.py`
-  - `python3 -m streamlit run main.py`
-  - `py -m streamlit run main.py`
+  - `python -m streamlit run src/Maptology/main.py`
+  - `python3 -m streamlit run src/Maptology/main.py`
+  - `py -m streamlit run src/Maptology/main.py`
 
 Another option is to run the app via a Docker container. To do so, TODO.
