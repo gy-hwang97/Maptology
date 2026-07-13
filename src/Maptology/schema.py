@@ -20,6 +20,27 @@ except ImportError:
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+# The basic data type of a column is recorded as an ontology term (not only as a
+# plain value), using the schema.org DataType vocabulary. Maptology's data types
+# map one-to-one onto schema.org's data types.
+SCHEMA_ORG_NS = "http://schema.org/"
+DATA_TYPE_TERMS = {
+    "String": "Text",
+    "Integer": "Integer",
+    "Float": "Float",
+    "Boolean": "Boolean",
+    "Date": "Date",
+    "Datetime": "DateTime",
+    "Time": "Time",
+}
+
+
+def data_type_term(data_type):
+    """Return (label, uri) of the schema.org term for a Maptology data type."""
+    label = DATA_TYPE_TERMS.get(data_type, "Text")
+    return label, SCHEMA_ORG_NS + label
+
+
 # Convert a friendly data type to a LinkML range
 def dtype_to_range(data_type):
     """Convert a Data Type string to a LinkML range value."""
@@ -100,6 +121,7 @@ def generate_linkml_schema():
         
         # Attribute definition - only standard LinkML fields
         # title = original column name (case/whitespace preserved). Used for re-import matching
+        dt_label, dt_uri = data_type_term(data_type)
         attribute_def = {
             "name": safe_column_name,
             "title": column_name,
@@ -109,6 +131,11 @@ def generate_linkml_schema():
                 "data_type": {
                     "tag": "data_type",
                     "value": data_type
+                },
+                # The same basic data type, as a schema.org ontology term.
+                "data_type_term": {
+                    "tag": "data_type_term",
+                    "value": dt_uri
                 }
             }
         }
@@ -165,6 +192,7 @@ def generate_linkml_schema():
             # Convert the data type
             range_value = dtype_to_range(data_type)
             
+            dt_label, dt_uri = data_type_term(data_type)
             attribute_def = {
                 "name": safe_column_name,
                 "title": column_name,
@@ -174,6 +202,11 @@ def generate_linkml_schema():
                     "data_type": {
                         "tag": "data_type",
                         "value": data_type
+                    },
+                    # The same basic data type, as a schema.org ontology term.
+                    "data_type_term": {
+                        "tag": "data_type_term",
+                        "value": dt_uri
                     }
                 }
             }
@@ -391,6 +424,7 @@ def generate_sssom_tsv():
             "owl": "http://www.w3.org/2002/07/owl#",
             "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
             "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "schema": "http://schema.org/",
         }
 
     def add_prefix_from_uri(uri, prefix_map):
@@ -534,6 +568,32 @@ def generate_sssom_tsv():
                             "mapping_justification": "semapv:ManualMappingCuration",
                             "comment": f"value-level mapping (column: {column_name})",
                         })
+
+        # Basic data type of each column, recorded as a schema.org ontology term.
+        # rdfs:range states "values of this column are of this type", which is the
+        # honest relationship: the column is modelled as a slot in the LinkML
+        # export, and its range is the data type. Only standard SSSOM slots are
+        # used, so no non-standard columns are introduced.
+        seen_columns = []
+        for mapping in st.session_state.mapped_terms:
+            col_name = mapping["Original Label"]
+            if col_name not in seen_columns:
+                seen_columns.append(col_name)
+        for column_name in st.session_state.value_ontology_mapping:
+            if column_name not in seen_columns:
+                seen_columns.append(column_name)
+
+        for col_name in seen_columns:
+            dt_label, dt_uri = data_type_term(get_column_data_type(col_name))
+            rows.append({
+                "subject_id": f"maptology:column__{safe_text(col_name)}",
+                "subject_label": col_name,
+                "predicate_id": "rdfs:range",
+                "object_id": uri_to_curie(dt_uri, converter),
+                "object_label": dt_label,
+                "mapping_justification": "semapv:ManualMappingCuration",
+                "comment": "basic data type (schema.org)",
+            })
 
         if not rows:
             return None
