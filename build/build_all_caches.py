@@ -39,10 +39,13 @@ from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-TSV_FILE = os.path.join("ontology_cache", "ontology_list.tsv")
-CACHE_DIR = "tfidf_cache"
-FAILURE_LOG = "build_failures.log"
-WORKER_STATUS_FILE = "_worker_status.json"
+# Resolved against the repo root (this script lives in build/) rather than the
+# current working directory, so the script works no matter where it is run from.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TSV_FILE = os.path.join(_REPO_ROOT, "ontology_cache", "ontology_list.tsv")
+CACHE_DIR = os.path.join(_REPO_ROOT, "tfidf_cache")
+FAILURE_LOG = os.path.join(_REPO_ROOT, "build_failures.log")
+WORKER_STATUS_FILE = os.path.join(_REPO_ROOT, "_worker_status.json")
 STREAM_THRESHOLD_MB = 100  # files larger than this prefer streaming XML parsing
 PER_ONTOLOGY_TIMEOUT_SEC = 120  # subprocess hard-kill if a single build exceeds this
 

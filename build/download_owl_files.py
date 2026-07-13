@@ -25,11 +25,15 @@ import requests
 # BioPortal API 기본 URL / BioPortal API base URL
 BIOPORTAL_API_URL = "https://data.bioontology.org"
 
+# Resolved against the repo root (this script lives in build/) rather than the
+# current working directory, so the script works no matter where it is run from.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # 캐시 디렉토리 / Cache directory
-CACHE_DIR = "ontology_cache"
+CACHE_DIR = os.path.join(_REPO_ROOT, "ontology_cache")
 
 # TSV 파일 경로 / TSV file path
-TSV_FILE = "ontology_cache/ontology_list.tsv"
+TSV_FILE = os.path.join(_REPO_ROOT, "ontology_cache", "ontology_list.tsv")
 
 
 def get_api_key():

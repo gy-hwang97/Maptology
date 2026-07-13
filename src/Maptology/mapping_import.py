@@ -33,6 +33,15 @@ import yaml
 from tfidf_search import get_ontology_list_from_tsv
 
 
+# SSSOM rows that record a column's basic data type (a schema.org term) use this
+# predicate. They are NOT ontology terms the user selected, so re-import must skip
+# them rather than treat them as mappings. Kept lowercase for comparison.
+_DATA_TYPE_PREDICATES = {
+    "rdfs:range",
+    "http://www.w3.org/2000/01/rdf-schema#range",
+}
+
+
 # ============================================================
 # Ontology catalog helpers (abbreviation -> full name)
 # ============================================================
@@ -194,6 +203,13 @@ def parse_sssom(text):
         subject_label = str(row.get("subject_label", ""))
         object_id = str(row.get("object_id", ""))
         object_label = str(row.get("object_label", ""))
+        predicate_id = str(row.get("predicate_id", "")).strip().lower()
+
+        # rdfs:range rows carry the column's basic data type (a schema.org term),
+        # not an ontology term the user selected. Skip them, otherwise re-import
+        # would turn the data type into a bogus mapping (e.g. sex -> schema:Text).
+        if predicate_id in _DATA_TYPE_PREDICATES:
+            continue
 
         term_uri = _expand_curie(object_id, curie_map)
         abbr = object_id.split(":")[0] if ":" in object_id else ""

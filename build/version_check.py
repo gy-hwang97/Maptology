@@ -41,8 +41,11 @@ import os
 import requests
 
 API_BASE = "https://data.bioontology.org"
-CACHE_DIR = "tfidf_cache"
-VERSIONS_FILE = os.path.join("ontology_cache", "ontology_versions.json")
+# Resolved against the repo root (this script lives in build/) rather than the
+# current working directory, so the script works no matter where it is run from.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CACHE_DIR = os.path.join(_REPO_ROOT, "tfidf_cache")
+VERSIONS_FILE = os.path.join(_REPO_ROOT, "ontology_cache", "ontology_versions.json")
 TIMEOUT = 30
 
 
