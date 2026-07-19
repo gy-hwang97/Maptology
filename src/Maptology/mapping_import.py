@@ -343,9 +343,20 @@ def _latest_label_def(abbr, term_uri, fallback_label, fallback_def):
 
 
 def apply_mappings(kept_cols, kept_vals):
+    """Merge the imported mappings into the current session.
+
+    Import ADDS; it never removes what the user already mapped. A record that is
+    already mapped is skipped, so "how many the file contained" and "how many were
+    actually added" are different numbers - both are reported to the user, because
+    showing only the first one makes an import that changed nothing look like it
+    did something.
+
+    Returns (new_cols, new_vals): the counts that were ACTUALLY added.
+    """
     from utils import get_column_data_type
 
-    added = False
+    new_cols = 0
+    new_vals = 0
     existing = set(
         (m["Original Label"], m["Ontology Term URI"])
         for m in st.session_state.mapped_terms
@@ -367,7 +378,7 @@ def apply_mappings(kept_cols, kept_vals):
             "Definition": definition,
         })
         existing.add(key)
-        added = True
+        new_cols += 1
 
     vom = st.session_state.value_ontology_mapping
     for r in kept_vals:
@@ -390,12 +401,31 @@ def apply_mappings(kept_cols, kept_vals):
             "Definition": definition,
             "Data Type": get_column_data_type(col),
         })
-        added = True
+        new_vals += 1
 
     # Bump mapping_version so checkbox widgets pick up the imported mappings
     # (otherwise Streamlit keeps stale unchecked widget state).
-    if added:
+    if new_cols or new_vals:
         st.session_state.mapping_version = st.session_state.get("mapping_version", 0) + 1
+
+    return new_cols, new_vals
+
+
+def current_mapping_totals():
+    """How many mappings exist in the session RIGHT NOW: (columns, values).
+
+    Deliberately computed on every render instead of being stored in the import
+    report - the report persists across reruns, so a stored total would go stale
+    (and start lying) as soon as the user checks another term."""
+    columns = len(st.session_state.mapped_terms)
+    values = 0
+    for value_dict in st.session_state.value_ontology_mapping.values():
+        for val_mappings in value_dict.values():
+            if isinstance(val_mappings, list):
+                values += len(val_mappings)
+            elif val_mappings:
+                values += 1
+    return columns, values
 
 
 # ============================================================
@@ -538,7 +568,7 @@ def render_import_section():
             kept_cols, kept_vals, dropped_cols, dropped_vals = filter_to_data(
                 col_recs, val_recs, df
             )
-            apply_mappings(kept_cols, kept_vals)
+            new_cols, new_vals = apply_mappings(kept_cols, kept_vals)
             unknown_onts, overflow_onts = _auto_select_ontologies(kept_cols, kept_vals)
             applied_types, rejected_types = _restore_data_types(kept_cols + kept_vals)
 
@@ -548,6 +578,11 @@ def render_import_section():
                 "fmt": fmt,
                 "kept_cols": len(kept_cols),
                 "kept_vals": len(kept_vals),
+                # How many of those were actually added (the rest were already
+                # mapped). Point-in-time facts about THIS import, so they are
+                # stored; the running totals are recomputed at render time.
+                "new_cols": new_cols,
+                "new_vals": new_vals,
                 "dropped_cols": [r["column"] for r in dropped_cols],
                 "dropped_vals": [str(r["column"]) + " = " + str(r["value"]) for r in dropped_vals],
                 "unknown_onts": unknown_onts,
@@ -558,10 +593,25 @@ def render_import_section():
 
     report = st.session_state.get("import_report")
     if report:
+        # Three different numbers, all of which the user can otherwise mistake for
+        # each other: what the file contained, what that actually changed, and how
+        # much is mapped now. The totals are read live from the session so they
+        # stay correct as the user keeps mapping after the import.
+        new_cols = report.get("new_cols", 0)
+        new_vals = report.get("new_vals", 0)
+        already_cols = report["kept_cols"] - new_cols
+        already_vals = report["kept_vals"] - new_vals
+        total_cols, total_vals = current_mapping_totals()
+
         st.success(
-            "Imported from " + report["fmt"] + ": "
-            + str(report["kept_cols"]) + " column mapping(s), "
-            + str(report["kept_vals"]) + " value mapping(s) kept."
+            "**Imported from " + report["fmt"] + "**  \n"
+            "- Column mappings: " + str(report["kept_cols"]) + " in the file - **"
+            + str(new_cols) + " added**, " + str(already_cols) + " already mapped  \n"
+            "- Value mappings: " + str(report["kept_vals"]) + " in the file - **"
+            + str(new_vals) + " added**, " + str(already_vals) + " already mapped  \n"
+            "\n"
+            "You now have **" + str(total_cols) + "** column mapping(s) and **"
+            + str(total_vals) + "** value mapping(s) in total."
         )
         dc = report.get("dropped_cols") or []
         dv = report.get("dropped_vals") or []
