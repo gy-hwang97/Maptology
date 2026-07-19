@@ -65,11 +65,13 @@ def _render_value_checklist(df, key_prefix, column, value):
                 })
 
         if result != is_checked:
+            # Direct checkbox toggle: the click already reran. Update the mapping
+            # only - no st.rerun() (avoids the second full rerun) and no version
+            # bump (avoids rebuilding every checkbox), so fast clicks aren't dropped.
             if result:
                 add_value_term(column, value, row)
             else:
                 remove_value_term(column, value, term_uri)
-            st.rerun()
 
 
 # Render value mapping section

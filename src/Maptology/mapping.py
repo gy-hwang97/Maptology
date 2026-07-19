@@ -9,9 +9,18 @@ from utils import get_column_data_type
 # Value mappings live in st.session_state.value_ontology_mapping[column][value].
 #
 # A checkbox is "checked" iff the term's URI is present in that mapping - there
-# is no separate selection list to keep in sync. mapping_version is bumped on
-# every change so checkbox widgets re-render from the mapping (Streamlit would
-# otherwise keep stale widget state after an import or a trash-icon delete).
+# is no separate selection list to keep in sync.
+#
+# mapping_version is bumped ONLY when the mapping changes from OUTSIDE the
+# checkbox itself (import, trash-icon delete, new file). Those paths must force
+# the checkbox widgets to re-read from the mapping, because Streamlit otherwise
+# keeps the stale widget state tied to the (unchanged) widget key.
+#
+# A DIRECT checkbox toggle does NOT bump the version and does NOT call st.rerun():
+# the click already triggers one Streamlit rerun, and the widget's new state
+# already matches the mapping, so rebuilding every checkbox (new keys) and running
+# the whole app a second time is pure overhead - and that overhead is exactly what
+# made fast consecutive clicks drop selections.
 # =============================================================================
 
 
@@ -63,17 +72,19 @@ def is_column_term_mapped(column, term_uri):
 
 
 def add_column_term(column, row):
+    # No _bump_version() here: this is called on a direct checkbox toggle (which
+    # already reran) AND from the external paths (which bump themselves).
     if not is_column_term_mapped(column, row["Ontology Term URI"]):
         st.session_state.mapped_terms.append(_column_entry_from_row(column, row))
-        _bump_version()
 
 
 def remove_column_term(column, term_uri):
+    # No _bump_version() here (see add_column_term). Callers that change the
+    # mapping from outside the checkbox (trash icon) bump the version themselves.
     st.session_state.mapped_terms = [
         m for m in st.session_state.mapped_terms
         if not (m["Original Label"] == column and m["Ontology Term URI"] == term_uri)
     ]
-    _bump_version()
 
 
 # -----------------------------------------------------------------------------
@@ -102,7 +113,7 @@ def add_value_term(column, value, row):
         existing = [existing]
     existing.append(_value_entry_from_row(column, row))
     vom[column][value] = existing
-    _bump_version()
+    # No _bump_version() here (direct toggle path); external callers bump.
 
 
 def remove_value_term(column, value, term_uri):
@@ -116,7 +127,7 @@ def remove_value_term(column, value, term_uri):
         del vom[column][value]
         if not vom[column]:
             del vom[column]
-    _bump_version()
+    # No _bump_version() here (see remove_column_term); external callers bump.
 
 
 # =============================================================================
@@ -149,16 +160,20 @@ def remove_value_mapping(column_name, value):
 
 def remove_term_mapping(column_name, term_uri):
     """Remove one column-level term mapping (trash icon). The matching
-    checkbox unchecks automatically because it reads from the mapping."""
+    checkbox unchecks automatically because it reads from the mapping.
+    This is an EXTERNAL change (not a checkbox toggle), so bump the version to
+    force the checklist widgets to re-read the mapping."""
     if column_name and term_uri:
         remove_column_term(column_name, term_uri)
+        _bump_version()
         st.rerun()
 
 
 def remove_individual_value_mapping(column_name, value, term_uri):
-    """Remove one value-level term mapping (trash icon)."""
+    """Remove one value-level term mapping (trash icon). External change -> bump."""
     if column_name and value and term_uri:
         remove_value_term(column_name, value, term_uri)
+        _bump_version()
         st.rerun()
 
 

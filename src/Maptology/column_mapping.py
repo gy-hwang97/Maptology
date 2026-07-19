@@ -67,11 +67,16 @@ def _render_term_checklist(df, key_prefix, column):
                 })
 
         if result != is_checked:
+            # A direct checkbox toggle. The click already triggered one rerun, so
+            # just update the mapping and let this run finish - the results table
+            # below re-renders from the updated mapping in the same run. No
+            # st.rerun() (would double the work) and no version bump (would rebuild
+            # every checkbox). This is what keeps fast consecutive clicks from
+            # dropping selections.
             if result:
                 add_column_term(column, row)
             else:
                 remove_column_term(column, term_uri)
-            st.rerun()
 
 
 # Render column selection and ontology mapping section
