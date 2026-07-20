@@ -1,7 +1,35 @@
+import logging
 import streamlit as st
 import pandas as pd
 import re
 from dateutil import parser as date_parser
+
+
+# ---------------------------------------------------------------------------
+# Silence Streamlit's harmless "MediaFileHandler: Missing file" traceback.
+#
+# When a browser tab left open from a PREVIOUS server run reconnects to a freshly
+# (re)started server, it re-requests the download-button files (CSV/JSON/TSV/YAML)
+# by their old in-memory ids. The restarted server no longer holds those ids, so
+# it correctly returns 404 - but Streamlit logs each one as a full ERROR-level
+# traceback, which floods the terminal and looks like something is broken. It is
+# purely cosmetic: a stale download URL 404s, the live app is unaffected, and a
+# first-time user who does not restart never triggers it.
+#
+# This drops ONLY that one message. The media_file_handler logger emits nothing
+# else at ERROR level, and every other logger (real errors included) is left
+# alone. Installed at import time so it is added exactly once per process, not on
+# every Streamlit rerun.
+# ---------------------------------------------------------------------------
+class _DropMissingMediaFileLog(logging.Filter):
+    def filter(self, record):
+        return "MediaFileHandler: Missing file" not in record.getMessage()
+
+
+logging.getLogger("streamlit.web.server.media_file_handler").addFilter(
+    _DropMissingMediaFileLog()
+)
+
 
 # BioPortal API is no longer used (local TF-IDF search only) / BioPortal API 더 이상 사용 안 함
 API_KEY = ""
