@@ -7,6 +7,20 @@ from mapping import remove_mapping, remove_value_mapping
 from schema import generate_linkml_schema, generate_sssom_tsv, data_type_term
 from utils import get_column_data_type
 
+
+def _render_download_button(label, data, file_name, mime, key, disabled=False):
+    """Create downloads on click instead of registering temporary files on render."""
+    st.download_button(
+        label,
+        data=lambda payload=data: payload,
+        file_name=file_name,
+        mime=mime,
+        key=key,
+        on_click="ignore",
+        disabled=disabled,
+    )
+
+
 # Render the mapped-terms section
 def render_mapped_terms():
     st.markdown('<div class="sub-heading">Mapped Ontology Terms</div>', unsafe_allow_html=True)
@@ -169,19 +183,21 @@ def render_download_buttons():
         
         if column_mappings_list:
             column_csv = pd.DataFrame(column_mappings_list).to_csv(index=False).encode('utf-8')
-            st.download_button(
+            _render_download_button(
                 "Download Column Mappings (CSV)",
                 data=column_csv, 
                 file_name="column_mappings.csv", 
-                mime="text/csv"
+                mime="text/csv",
+                key="download_column_mappings",
             )
         else:
-            st.download_button(
+            _render_download_button(
                 "Download Column Mappings (CSV)",
-                data="No column mappings",
+                data=b"",
                 file_name="column_mappings.csv",
                 mime="text/csv",
-                disabled=True
+                key="download_column_mappings",
+                disabled=True,
             )
 
     with col2:
@@ -218,38 +234,42 @@ def render_download_buttons():
         
         if value_mappings_list:
             value_csv = pd.DataFrame(value_mappings_list).to_csv(index=False).encode('utf-8')
-            st.download_button(
+            _render_download_button(
                 "Download Value Mappings (CSV)",
                 data=value_csv,
                 file_name="value_mappings.csv",
-                mime="text/csv"
+                mime="text/csv",
+                key="download_value_mappings",
             )
         else:
-            st.download_button(
+            _render_download_button(
                 "Download Value Mappings (CSV)",
-                data="No value mappings",
+                data=b"",
                 file_name="value_mappings.csv",
                 mime="text/csv",
-                disabled=True
+                key="download_value_mappings",
+                disabled=True,
             )
 
     with col3:
         # SSSOM TSV 다운로드 / SSSOM TSV download
         sssom_tsv = generate_sssom_tsv()
         if sssom_tsv:
-            st.download_button(
+            _render_download_button(
                 "Download SSSOM (TSV)",
                 data=sssom_tsv,
                 file_name="maptology_mappings.sssom.tsv",
-                mime="text/tab-separated-values"
+                mime="text/tab-separated-values",
+                key="download_sssom",
             )
         else:
-            st.download_button(
+            _render_download_button(
                 "Download SSSOM (TSV)",
-                data="No mappings",
+                data=b"",
                 file_name="maptology_mappings.sssom.tsv",
                 mime="text/tab-separated-values",
-                disabled=True
+                key="download_sssom",
+                disabled=True,
             )
     
     col4, col5, _ = st.columns(3)
@@ -258,20 +278,22 @@ def render_download_buttons():
     if schema:
         with col4:
             yaml_str = yaml.dump(schema, sort_keys=False, default_flow_style=False)
-            st.download_button(
+            _render_download_button(
                 "Download LinkML Schema (YAML)",
                 data=yaml_str,
                 file_name="ontology_mapping_schema.yaml",
-                mime="text/yaml"
+                mime="text/yaml",
+                key="download_linkml_yaml",
             )
         
         with col5:
             json_str = json.dumps(schema, indent=2)
-            st.download_button(
+            _render_download_button(
                 "Download Schema as JSON",
                 data=json_str,
                 file_name="ontology_mapping_schema.json",
-                mime="application/json"
+                mime="application/json",
+                key="download_linkml_json",
             )
 
     # SSSOM / LinkML 홈페이지 링크 / SSSOM and LinkML homepage links
