@@ -94,6 +94,12 @@ def test_all_catalog_entries_appear_with_correct_artifacts(tmp_path):
     assert by["NOP"]["download_url"] is None
     assert by["NOP"]["cache_build_id"] is None
 
+    # artifact_status makes each outcome explicit
+    assert by["EFO"]["artifact_status"] == "available"
+    assert by["ABC"]["artifact_status"] == "not_served"
+    assert by["XYZ"]["artifact_status"] == "not_served"
+    assert by["NOP"]["artifact_status"] == "missing_cache"
+
     # GC: only EFO's zip exists in the cache dir
     zips = sorted(os.listdir(os.path.join(str(out_dir), "cache")))
     assert zips == ["EFO-" + efo["cache_build_id"] + ".zip"]
@@ -131,6 +137,21 @@ def test_written_manifest_matches_return_and_missing_versions_is_null(tmp_path):
     written = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
     assert written == manifest
     assert written["ontologies"][0]["ontology_version"] is None
+
+
+def test_green_without_cache_is_flagged_and_warned(tmp_path, capsys):
+    manifest, out_dir = _run(
+        tmp_path,
+        catalog=["EFO"],
+        caches=[],  # green in policy, but no cache was built
+        policy_rows=[("EFO", "maptology_server")],
+    )
+    efo = manifest["ontologies"][0]
+    assert efo["delivery_mode"] == "maptology_server"
+    assert efo["download_url"] is None
+    assert efo["artifact_status"] == "missing_cache"
+    out = capsys.readouterr().out
+    assert "EFO" in out and "missing" in out.lower()
 
 
 def test_reclassify_removes_stale_zip(tmp_path):

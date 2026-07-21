@@ -117,6 +117,7 @@ def build_manifest(catalog, versions, policy, tfidf_dir, out_zip_dir, generated_
     os.makedirs(out_zip_dir, exist_ok=True)
     ontologies = []
     referenced = set()
+    missing_cache = []
     for entry in catalog:
         acronym = entry["acronym"]
         mode = delivery_mode_for(policy, acronym)
@@ -135,11 +136,22 @@ def build_manifest(catalog, versions, policy, tfidf_dir, out_zip_dir, generated_
             "download_url": None,
             "sha256": None,
             "size": None,
+            "artifact_status": None,
         }
 
         members = None
         if mode == "maptology_server":
             members = read_cache_members(tfidf_dir, acronym)
+
+        # Record why (or why not) an artifact is attached, so a green ontology
+        # whose cache failed to build is visible rather than silently null.
+        if mode != "maptology_server":
+            record["artifact_status"] = "not_served"
+        elif members is None:
+            record["artifact_status"] = "missing_cache"
+            missing_cache.append(acronym)
+        else:
+            record["artifact_status"] = "available"
 
         if members is not None:
             members.append(("metadata.json", _metadata_bytes(record, mode)))
@@ -164,7 +176,7 @@ def build_manifest(catalog, versions, policy, tfidf_dir, out_zip_dir, generated_
         "generated_at": generated_at,
         "ontologies": ontologies,
     }
-    return manifest, referenced
+    return manifest, referenced, missing_cache
 
 
 # ------------------------------------------------------------------ publishing
@@ -217,7 +229,7 @@ def generate(list_tsv=None, tfidf_dir=None, versions_json=None,
               + " -> every ontology treated as blocked")
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    manifest, referenced = build_manifest(
+    manifest, referenced, missing_cache = build_manifest(
         catalog, versions, policy, tfidf_dir, out_zip_dir, generated_at)
 
     # Publish: new zips already written; swap the manifest in atomically, then
@@ -228,6 +240,10 @@ def generate(list_tsv=None, tfidf_dir=None, versions_json=None,
     served = sum(1 for o in manifest["ontologies"] if o["download_url"])
     print("Wrote " + manifest_file + " -- " + str(len(manifest["ontologies"]))
           + " ontologies, " + str(served) + " served from server")
+    if missing_cache:
+        print("WARNING: " + str(len(missing_cache)) + " maptology_server "
+              + "ontolog(ies) are missing a complete cache and were NOT "
+              + "packaged: " + ", ".join(missing_cache))
     return manifest
 
 
