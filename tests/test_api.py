@@ -112,6 +112,34 @@ def test_existing_but_unreferenced_zip_is_not_served(client):
     assert client.get("/v1/cache/ROGUE-deadbeef0000.zip").status_code == 404
 
 
+def test_cache_guard_requires_maptology_server_mode(client):
+    # Defence in depth: even if a manifest is corrupted or hand-edited so that a
+    # non-green ontology carries a download_url and the file exists on disk, the
+    # API must refuse it because the delivery_mode is not maptology_server.
+    import json
+    from api import config
+    forged = "FORGED-000000000000.zip"
+    with open(os.path.join(config.cache_zip_dir(), forged), "wb") as fh:
+        fh.write(b"PK forged bytes")
+    manifest = {
+        "manifest_version": 1,
+        "cache_format_version": 1,
+        "generated_at": "x",
+        "ontologies": [{
+            "acronym": "FORGED", "name": "F",
+            "ontology_version": None, "submission_id": None,
+            "delivery_mode": "bioportal_user",   # NOT maptology_server
+            "license": "", "license_url": "", "reason": "",
+            "cache_build_id": "000000000000",
+            "download_url": "/v1/cache/" + forged,  # but a url is (wrongly) present
+            "sha256": None, "size": None,
+        }],
+    }
+    with open(config.manifest_path(), "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh)
+    assert client.get("/v1/cache/" + forged).status_code == 404
+
+
 def test_reclassified_ontology_stops_serving(tmp_path, monkeypatch):
     c, dist = _client_for(
         tmp_path, monkeypatch,

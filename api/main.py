@@ -37,9 +37,16 @@ def _load_manifest():
 
 
 def _served_filenames(manifest):
-    """Basenames of every download_url the current manifest references."""
+    """Basenames the manifest both references AND marks maptology_server.
+
+    Requiring delivery_mode explicitly (not just the presence of a download_url)
+    is defence in depth: a corrupted or hand-edited manifest that put a url on a
+    non-green ontology still cannot be served.
+    """
     names = set()
     for ontology in manifest.get("ontologies", []):
+        if ontology.get("delivery_mode") != "maptology_server":
+            continue
         url = ontology.get("download_url")
         if url:
             names.add(url.rsplit("/", 1)[-1])
