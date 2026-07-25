@@ -12,6 +12,10 @@ from components import show_term_modal
 from utils import validate_type_change, get_column_data_type
 
 
+# Above this many distinct values, the value dropdown also gets a filter box.
+VALUE_FILTER_THRESHOLD = 25
+
+
 def _render_value_checklist(df, key_prefix, column, value):
     """Render a checklist of value search results. Checked-state is derived
     from value_ontology_mapping (single source of truth)."""
@@ -109,8 +113,29 @@ def render_value_mapping_section():
         if len(unique_values) > 0:
             st.markdown('<div class="sub-heading">Select a unique value from column \'' + selected_col + '\' to map to an ontology term</div>', unsafe_allow_html=True)
 
-            # Convert to string for display
-            value_options = [str(v) for v in unique_values[:5].tolist()]
+            # EVERY unique value has to be reachable: the exported mapping file
+            # documents each one, so a value the dropdown never offers can never
+            # be mapped. (This list used to be truncated to the first 5, which
+            # silently made values 6+ impossible to map at all.)
+            all_values = [str(v) for v in unique_values.tolist()]
+
+            # A long dropdown is hard to work through, so offer a filter once the
+            # list is big enough to need one. Short columns render exactly as before.
+            value_options = all_values
+            if len(all_values) > VALUE_FILTER_THRESHOLD:
+                needle = st.text_input(
+                    "Filter values",
+                    key="value_filter__" + str(selected_col),
+                    placeholder="Type to filter values...",
+                )
+                if needle:
+                    matches = [v for v in all_values if needle.lower() in v.lower()]
+                    if matches:
+                        value_options = matches
+                    else:
+                        st.caption("No value matches '" + needle + "' - showing all values.")
+                st.caption("Showing " + str(len(value_options)) + " of "
+                           + str(len(all_values)) + " unique values")
 
             if st.session_state.selected_unique_value is None or st.session_state.selected_unique_value not in value_options:
                 default_value = value_options[0] if value_options else None
