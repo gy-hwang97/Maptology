@@ -94,10 +94,19 @@ def main():
         if meta.get(k):
             print("      %-17s %s" % (k, str(meta[k])[:52]))
 
-    rule("5. A restricted one is refused, even by direct URL")
-    blocked = [o for o in onts if o["delivery_mode"] != "maptology_server"][:1]
-    tries = [("a blocked/unlisted ontology",
-              "/v1/cache/%s-000000000000.zip" % (blocked[0]["acronym"] if blocked else "NOPE")),
+    rule("5. What is NOT served, and why that is more than a naming accident")
+    # The honest evidence is the manifest itself: a restricted ontology is never
+    # given a download address, so there is nothing for a client to ask for.
+    restricted = [o for o in onts if o["delivery_mode"] != "maptology_server"]
+    with_url = [o for o in restricted if o["download_url"]]
+    print("   restricted ontologies            %d" % len(restricted))
+    print("   ...of those, given a download URL %d   <- must be zero" % len(with_url))
+    ex = restricted[0]
+    print("   e.g. %-14s download_url=%s" % (ex["acronym"], ex["download_url"]))
+
+    print("\n   Requests that are refused:")
+    tries = [("an address that is not offered",
+              "/v1/cache/%s-000000000000.zip" % ex["acronym"]),
              ("a made-up file", "/v1/cache/NOPE-000000000000.zip"),
              ("a path-traversal attempt", "/v1/cache/..%2f..%2fetc%2fpasswd.zip")]
     for label, path in tries:
@@ -105,7 +114,15 @@ def main():
             status, _ = get(base + path)
         except urllib.error.HTTPError as e:
             status = e.code
-        print("   %-28s -> HTTP %d" % (label, status))
+        print("      %-32s -> HTTP %d" % (label, status))
+
+    print("\n   Note: the first line uses a made-up filename, so on its own it")
+    print("   only shows an unknown address is refused. The licence gate proper")
+    print("   is that the server serves a file ONLY while the current manifest")
+    print("   lists it - move an ontology to blocked, regenerate, and its old")
+    print("   URL stops working without restarting anything. tests/test_api.py")
+    print("   covers exactly that (test_existing_but_unreferenced_zip_is_not_served,")
+    print("   test_reclassified_ontology_stops_serving).")
 
     print("\n" + "=" * 68)
     print("The split above comes from ontology_distribution_policy.tsv.")
