@@ -62,6 +62,16 @@ def client(tmp_path, monkeypatch):
     return c
 
 
+def test_root_points_at_the_endpoints(client):
+    # Opening the bare address is the first thing anyone does; a 404 there looks
+    # like the server is broken.
+    r = client.get("/")
+    assert r.status_code == 200
+    body = r.json()
+    assert "/docs" in body["endpoints"].values()
+    assert "/v1/manifest" in body["endpoints"].values()
+
+
 def test_health(client):
     r = client.get("/v1/health")
     assert r.status_code == 200

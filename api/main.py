@@ -53,6 +53,25 @@ def _served_filenames(manifest):
     return names
 
 
+@app.get("/")
+def index():
+    """Anyone opening the bare address should be told where to go, rather than
+    getting a bare 404 that looks like the server is broken."""
+    return {
+        "service": "Maptology API",
+        "manifest_version": MANIFEST_VERSION,
+        "cache_format_version": CACHE_FORMAT_VERSION,
+        "endpoints": {
+            "interactive docs": "/docs",
+            "health": "/v1/health",
+            "catalogue": "/v1/manifest",
+            "one cache": "/v1/cache/{acronym}-{cache_build_id}.zip",
+        },
+        "note": "download URLs come from /v1/manifest; only ontologies whose "
+                "licence permits redistribution are served here",
+    }
+
+
 @app.get("/v1/health")
 def health():
     return {
