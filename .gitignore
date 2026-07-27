@@ -209,3 +209,6 @@ text2term_practice.py
 
 .DS_Store
 .devcontainer/
+
+# Draft policy generated for review, not authoritative
+ontology_distribution_policy.draft.tsv
