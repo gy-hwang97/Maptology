@@ -131,7 +131,12 @@ def build_manifest(catalog, versions, policy, tfidf_dir, out_zip_dir, generated_
             "delivery_mode": mode,
             "license": pol.get("license", ""),
             "license_url": pol.get("license_url", ""),
-            "reason": pol.get("reason", ""),
+            # An ontology the policy never mentions is blocked by the fail-safe.
+            # Say so, otherwise the manifest shows a blocked entry with no
+            # explanation and it looks like a defect rather than the default.
+            "reason": pol.get("reason") or (
+                "" if pol else "not listed in the distribution policy; blocked "
+                                "by default until reviewed"),
             "cache_build_id": None,
             "download_url": None,
             "sha256": None,
