@@ -1,5 +1,0 @@
-acronym	delivery_mode	license	license_url	reason
-EFO	maptology_server	Apache-2.0	https://www.ebi.ac.uk/efo/	Redistribution allowed
-NCIT	maptology_server	CC-BY-4.0	https://creativecommons.org/licenses/by/4.0/	Attribution
-ABC	bioportal_user			Public ontology but no clear licence
-XYZ	blocked	CC-BY-NC-ND		NoDerivs; explicit permission required
