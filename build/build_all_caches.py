@@ -43,9 +43,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 # current working directory, so the script works no matter where it is run from.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TSV_FILE = os.path.join(_REPO_ROOT, "ontology_cache", "ontology_list.tsv")
-CACHE_DIR = os.path.join(_REPO_ROOT, "tfidf_cache")
+# Each ontology is built in its own subprocess, which re-imports this module and
+# so cannot see a caller's monkeypatched value. Reading the environment means a
+# measurement or a trial run can point somewhere else and actually be isolated.
+CACHE_DIR = os.environ.get("MAPTOLOGY_CACHE_DIR") or os.path.join(_REPO_ROOT, "tfidf_cache")
 FAILURE_LOG = os.path.join(_REPO_ROOT, "build_failures.log")
-WORKER_STATUS_FILE = os.path.join(_REPO_ROOT, "_worker_status.json")
+WORKER_STATUS_FILE = os.path.join(CACHE_DIR, "_worker_status.json")
 STREAM_THRESHOLD_MB = 100  # files larger than this prefer streaming XML parsing
 PER_ONTOLOGY_TIMEOUT_SEC = 120  # subprocess hard-kill if a single build exceeds this
 
