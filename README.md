@@ -85,15 +85,16 @@ local and need no network connection at all.
 | Ontologies | ~1,000 |
 | Downloaded | **~15 GB** of ontology files |
 | Search indexes built from them | **~1.6 GB** |
-| Downloading | **~55 minutes** |
+| Downloading | **~20 minutes** |
 | Building the indexes | **~60–90 minutes** |
-| **Total, once** | **roughly 2 hours** |
+| **Total, once** | **roughly 1.5 hours** |
 
 Two things are worth knowing before you start it.
 
-**A faster internet connection will not help much.** Downloads ran at about
-4.5 MB/s regardless of file size in our testing, so BioPortal's server, not your
-connection, sets the pace.
+**A faster internet connection may not help much.** A single connection to
+BioPortal runs at about 4.7 MB/s whatever the file size, so Maptology downloads
+several at once (12.4 MB/s over four connections in testing). Beyond that,
+BioPortal's server rather than your connection sets the pace.
 
 **Index-building cost comes from the number of ontologies, not their size.** The
 800 smallest are only 3% of the data but took half the build time, because each
