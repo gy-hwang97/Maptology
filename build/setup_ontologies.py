@@ -28,6 +28,7 @@ The API key is read from BIOPORTAL_APIKEY, or --apikey, or a prompt.
 
 import argparse
 import csv
+import json
 import os
 import sys
 import time
@@ -44,6 +45,7 @@ import version_check as versions              # noqa: E402
 API_BASE = "https://data.bioontology.org"
 OWL_DIR = os.path.join(_REPO_ROOT, "ontology_cache")
 TSV_FILE = os.path.join(OWL_DIR, "ontology_list.tsv")
+FAILURES_FILE = os.path.join(OWL_DIR, "build_failures.json")
 
 # BioPortal documents a limit of 15 requests per second per IP. Stay well under
 # it: this script is a background chore, not something anyone is waiting on.
@@ -63,21 +65,52 @@ def get_api_key(from_arg=None):
         return ""
 
 
+def load_failures():
+    """Submissions that could not be parsed, so they are not retried forever.
+
+    A few ontologies are published in formats none of our parsers read. Without
+    this, every start would re-download and re-fail them. Keyed by submission,
+    so a new release from the publisher is tried afresh.
+    """
+    if not os.path.exists(FAILURES_FILE):
+        return {}
+    try:
+        with open(FAILURES_FILE, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (ValueError, OSError):
+        return {}
+
+
+def save_failures(failures):
+    os.makedirs(OWL_DIR, exist_ok=True)
+    tmp = FAILURES_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(failures, fh, indent=2, sort_keys=True)
+    os.replace(tmp, FAILURES_FILE)
+
+
 def owl_path(acronym):
     return os.path.join(OWL_DIR, acronym + ".owl")
 
 
-def plan(catalogue, local, only=None):
+def plan(catalogue, local, only=None, failures=None):
     """Decide what to do with each ontology.
 
     Returns a list of (entry, action, why). An ontology is rebuilt when the
     submission we recorded differs from the one BioPortal now offers, or when
     the files it needs are missing.
     """
+    failures = failures or {}
     out = []
     for ont in catalogue:
         acronym = ont["acronym"]
         if only and acronym not in only:
+            continue
+        # Already proven unreadable at this exact submission; a new one is
+        # worth another try, this one is not.
+        if failures.get(acronym) == ont.get("submissionId") and not only:
+            out.append((ont, "skip", "no parser could read submission %s"
+                        % ont.get("submissionId")))
             continue
         have = local.get(acronym) or {}
         cached = builder.is_cache_built(acronym)
@@ -94,25 +127,59 @@ def plan(catalogue, local, only=None):
 
 
 def fetch_catalogue(api_key, only=None):
-    """Ontologies available in a format we can parse, each with its current
-    submission id. The id is read now and stored after a successful build, so a
-    cache is never labelled with a version it was not built from."""
-    print("Asking BioPortal which ontologies are available...")
-    ontologies = downloader.get_all_ontologies(api_key)
-    usable = downloader.filter_ontologies(ontologies, api_key)
+    """Ontologies we can parse, each with the submission BioPortal now offers.
+
+    One request to /submissions returns the latest submission of every ontology
+    with its id, version, release date and source language. Asking per ontology
+    instead costs about 2,200 requests and takes over half an hour, which is far
+    too slow to sit in front of app startup.
+
+    The id is read here and stored only after a build succeeds, so a cache is
+    never labelled with a version it was not built from.
+    """
+    print("Asking BioPortal which ontologies are available...", end="", flush=True)
+    t0 = time.time()
+    resp = requests.get(
+        API_BASE + "/submissions",
+        params={"apikey": api_key,
+                "include": "submissionId,version,released,hasOntologyLanguage,ontology",
+                "display_links": "false", "display_context": "false"},
+        timeout=600)
+    resp.raise_for_status()
+    submissions = resp.json()
+    print(" %d in %.0fs" % (len(submissions), time.time() - t0))
 
     out = []
-    for ont in usable:
-        acronym = ont["acronym"]
-        if only and acronym not in only:
+    skipped = {}
+    for sub in submissions:
+        ont = sub.get("ontology") or {}
+        acronym = (ont.get("acronym") if isinstance(ont, dict) else None) or ""
+        if not acronym or (only and acronym not in only):
             continue
-        info = versions.get_latest_submission(acronym, api_key)
-        time.sleep(REQUEST_INTERVAL)
-        ont = dict(ont)
-        ont["submissionId"] = (info or {}).get("submissionId")
-        ont["version"] = (info or {}).get("version")
-        ont["released"] = (info or {}).get("released")
-        out.append(ont)
+        language = str(sub.get("hasOntologyLanguage") or "").upper()
+        # OWL downloads natively; OBO is converted by BioPortal to RDF/XML.
+        # Anything else (SKOS, UMLS) our parsers cannot read.
+        if "OWL" in language:
+            native, fmt = "OWL", "OWL"
+        elif "OBO" in language:
+            native, fmt = "OBO", "RDF/XML"
+        else:
+            skipped[language or "UNKNOWN"] = skipped.get(language or "UNKNOWN", 0) + 1
+            continue
+        out.append({
+            "acronym": acronym,
+            "name": (ont.get("name") if isinstance(ont, dict) else "") or acronym,
+            "native_format": native,
+            "download_format": fmt,
+            "submissionId": sub.get("submissionId"),
+            "version": sub.get("version"),
+            "released": sub.get("released"),
+        })
+    if skipped:
+        worst = sorted(skipped.items(), key=lambda kv: -kv[1])[:3]
+        print("   skipping %d in formats Maptology cannot parse (%s)"
+              % (sum(skipped.values()),
+                 ", ".join("%s %d" % (k, v) for k, v in worst)))
     return out
 
 
@@ -137,17 +204,57 @@ def download_one(ont, api_key):
     return os.path.getsize(dest) / 1e6
 
 
+def _existing_rows():
+    """Rows already in ontology_list.tsv, keyed by acronym."""
+    if not os.path.exists(TSV_FILE):
+        return {}
+    out = {}
+    try:
+        with open(TSV_FILE, "r", encoding="utf-8", newline="") as fh:
+            for r in csv.DictReader(fh, delimiter="\t"):
+                acr = (r.get("abbreviation") or "").strip()
+                if acr:
+                    out[acr] = r
+    except OSError:
+        return {}
+    return out
+
+
+def _index(acronym):
+    """Build the TF-IDF index for one ontology. Returns the term count."""
+    path = owl_path(acronym)
+    builder.cleanup_partial_cache(acronym)
+    method, n, dep, n_def, n_syn, shape = builder.build_one_with_timeout(
+        acronym, path, os.path.getsize(path) / 1e6)
+    return n
+
+
 def write_catalogue_tsv(entries):
-    """Rewrite ontology_list.tsv from whatever is actually on disk, so the app
-    never lists an ontology it cannot open."""
-    rows = []
+    """Rewrite ontology_list.tsv from whatever is actually on disk.
+
+    Listing only what BioPortal currently offers would quietly drop ontologies
+    that were withdrawn from its catalogue but are still downloaded, built and
+    perfectly usable here (CMEO, CVO and HTO are in that position today).
+    Anything with an OWL file on disk stays; anything without one goes, so the
+    app never offers a file it cannot open.
+    """
+    rows, seen = [], set()
     for ont in entries:
         acronym = ont["acronym"]
         if not os.path.exists(owl_path(acronym)):
             continue
+        seen.add(acronym)
         rows.append([ont.get("name") or acronym, owl_path(acronym), acronym,
                      ont.get("native_format", "OWL"),
                      ont.get("download_format", "OWL")])
+
+    for acr, old in _existing_rows().items():
+        if acr in seen or not os.path.exists(owl_path(acr)):
+            continue
+        rows.append([old.get("name") or acr, owl_path(acr), acr,
+                     old.get("native_format", "OWL"),
+                     old.get("download_format", "OWL")])
+
     rows.sort(key=lambda r: r[2])
     os.makedirs(OWL_DIR, exist_ok=True)
     with open(TSV_FILE, "w", encoding="utf-8", newline="") as fh:
@@ -160,7 +267,8 @@ def write_catalogue_tsv(entries):
 def run(api_key, only=None, limit=0, check_only=False):
     catalogue = fetch_catalogue(api_key, only)
     local = versions.load_local_versions()
-    todo = plan(catalogue, local, only)
+    failures = load_failures()
+    todo = plan(catalogue, local, only, failures)
 
     work = [(o, why) for o, act, why in todo if act == "fetch"]
     skip = len(todo) - len(work)
@@ -185,7 +293,8 @@ def run(api_key, only=None, limit=0, check_only=False):
         acronym = ont["acronym"]
         head = "[%d/%d] %-14s" % (i, len(work), acronym)
         try:
-            if not os.path.exists(owl_path(acronym)):
+            reused = os.path.exists(owl_path(acronym))
+            if not reused:
                 print(head + " downloading...", end="", flush=True)
                 mb = download_one(ont, api_key)
                 print(" %.1f MB" % mb, end="", flush=True)
@@ -193,12 +302,23 @@ def run(api_key, only=None, limit=0, check_only=False):
             else:
                 print(head + " have file", end="", flush=True)
 
-            size_mb = os.path.getsize(owl_path(acronym)) / 1e6
             print(", indexing...", end="", flush=True)
             t0 = time.time()
-            builder.cleanup_partial_cache(acronym)
-            method, n, dep, n_def, n_syn, shape = builder.build_one_with_timeout(
-                acronym, owl_path(acronym), size_mb)
+            try:
+                n = _index(acronym)
+            except Exception:
+                # A file left over from an earlier run can be truncated, or in a
+                # format we asked BioPortal not to send. Retrying the same bytes
+                # forever would keep this ontology broken, so fetch it once more
+                # before giving up.
+                if not reused:
+                    raise
+                print(" stale file, re-downloading...", end="", flush=True)
+                os.remove(owl_path(acronym))
+                mb = download_one(ont, api_key)
+                print(" %.1f MB, indexing..." % mb, end="", flush=True)
+                time.sleep(REQUEST_INTERVAL)
+                n = _index(acronym)
             print(" %d terms (%.0fs)" % (n, time.time() - t0))
 
             # Record the submission only once the build actually succeeded, so a
@@ -213,6 +333,8 @@ def run(api_key, only=None, limit=0, check_only=False):
             break
         except Exception as e:
             print(" FAILED: %s: %s" % (type(e).__name__, str(e)[:70]))
+            failures[acronym] = ont.get("submissionId")
+            save_failures(failures)
             failed += 1
 
     listed = write_catalogue_tsv(catalogue)

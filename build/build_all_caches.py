@@ -420,7 +420,20 @@ def build_one(acronym, owl_file, size_mb):
         last_err = RuntimeError("0 terms extracted via " + label)
 
     if not terms:
-        raise last_err if last_err is not None else RuntimeError("all extractors failed")
+        # Reporting last_err alone is misleading: the rdflib fallback tries
+        # several serialisations and the final one is json-ld, so every
+        # unparseable file was reported as a JSON error regardless of what it
+        # actually contained. Say what was tried and how the file starts.
+        try:
+            with open(owl_file, "rb") as fh:
+                head = fh.read(60).decode("utf-8", "replace").strip().replace("\n", " ")
+        except OSError:
+            head = "?"
+        raise RuntimeError(
+            "no parser could read this file (tried %s); starts with %r; last "
+            "error was %s: %s"
+            % (", ".join(label for label, _ in attempts), head,
+               type(last_err).__name__ if last_err else "none", last_err))
 
     shape = build_and_save(acronym, terms)
     n_def = sum(1 for t in terms if t["definition"] != "No definition available")

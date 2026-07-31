@@ -82,3 +82,38 @@ def test_catalogue_tsv_lists_only_files_on_disk(monkeypatch, tmp_path):
     # BBB has no OWL file, so listing it would offer the app something it
     # cannot open.
     assert "BBB" not in body
+
+
+def test_ontology_withdrawn_from_bioportal_is_kept(monkeypatch, tmp_path):
+    # CMEO, CVO and HTO are downloaded, built and usable, but BioPortal no
+    # longer lists them. Dropping them would take working ontologies away from
+    # the user for no benefit.
+    _patch(monkeypatch, tmp_path, built=set(), owl_present=["AAA", "GONE"])
+    tsv = tmp_path / "ontology_list.tsv"
+    tsv.write_text(
+        "name\tfile_path\tabbreviation\tnative_format\tdownload_format\n"
+        "Withdrawn Ontology\told/path.owl\tGONE\tOWL\tOWL\n",
+        encoding="utf-8")
+    monkeypatch.setattr(setup, "TSV_FILE", str(tsv))
+
+    n = setup.write_catalogue_tsv(_catalogue())   # catalogue has AAA and BBB only
+
+    body = tsv.read_text(encoding="utf-8")
+    assert n == 2
+    assert "GONE" in body and "Withdrawn Ontology" in body
+    assert "AAA" in body
+
+
+def test_withdrawn_entry_without_its_file_is_dropped(monkeypatch, tmp_path):
+    _patch(monkeypatch, tmp_path, built=set(), owl_present=["AAA"])
+    tsv = tmp_path / "ontology_list.tsv"
+    tsv.write_text(
+        "name\tfile_path\tabbreviation\tnative_format\tdownload_format\n"
+        "Deleted Ontology\told/path.owl\tGONE\tOWL\tOWL\n",
+        encoding="utf-8")
+    monkeypatch.setattr(setup, "TSV_FILE", str(tsv))
+
+    n = setup.write_catalogue_tsv(_catalogue())
+
+    assert n == 1
+    assert "GONE" not in tsv.read_text(encoding="utf-8")
