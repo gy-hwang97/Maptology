@@ -82,15 +82,27 @@ local and need no network connection at all.
 
 | | |
 |---|---|
-| Ontologies | ~900 |
+| Ontologies | ~1,000 |
 | Downloaded | **~15 GB** of ontology files |
 | Search indexes built from them | **~1.6 GB** |
-| Time | Tens of minutes, mostly spent on a handful of very large ontologies |
+| Downloading | **~55 minutes** |
+| Building the indexes | **~60–90 minutes** |
+| **Total, once** | **roughly 2 hours** |
 
-Most ontologies are small and process in under a second. A few — NCIT, CHEBI,
-PR, GAZ — are around 1 GB each and take a couple of minutes apiece, so the total
-depends heavily on your connection speed. Progress is printed in the terminal,
-and the app opens once processing has finished.
+Two things are worth knowing before you start it.
+
+**A faster internet connection will not help much.** Downloads ran at about
+4.5 MB/s regardless of file size in our testing, so BioPortal's server, not your
+connection, sets the pace.
+
+**Index-building cost comes from the number of ontologies, not their size.** The
+800 smallest are only 3% of the data but took half the build time, because each
+one carries a fixed start-up cost. The handful of very large ones (NCIT, CHEBI,
+PR, GAZ, around 1 GB each) are only a couple of minutes apiece.
+
+Progress is printed in the terminal, and the app opens once processing has
+finished. A few ontologies are published in formats Maptology cannot read; those
+are recorded and skipped rather than retried on every start.
 
 On later runs Maptology only checks which ontologies have new versions on
 BioPortal and updates those, which is much quicker. Requests are spaced out to
