@@ -34,12 +34,67 @@ Validate and download the mappings in LinkML and/or SSSOM formats.
 
 ## Getting Started
 
-Maptology can be accessed for free by visiting our [demo site](https://bioapps.byu.edu/Maptology). No installation is required other than a Web browser.
+Maptology runs on your own computer. Versions 3.9+ of Python are supported.
 
-Alternatively, Maptology can be run on a local computer. Maptology is available va [PyPi](https://TODO). Versions 3.9+ of Python are supported. To start the app, run `streamlit run src/Maptology/main.py`. If that doesn't work, try one of these commands:
+```
+git clone https://github.com/gy-hwang97/Maptology.git
+cd Maptology
+pip install -r requirements.txt
+```
+
+To start the app, run `streamlit run src/Maptology/main.py`. If that doesn't work, try one of these commands:
 
   - `python -m streamlit run src/Maptology/main.py`
   - `python3 -m streamlit run src/Maptology/main.py`
   - `py -m streamlit run src/Maptology/main.py`
 
-Another option is to run the app via a Docker container. To do so, TODO.
+### Before the first run: a BioPortal API key
+
+Maptology searches ontologies locally, which is what makes it fast, but those
+local search indexes have to be built from the ontologies themselves first.
+Maptology downloads them from [BioPortal](https://bioportal.bioontology.org),
+which requires a free API key.
+
+1. Create a free account at
+   [bioportal.bioontology.org/accounts](https://bioportal.bioontology.org/accounts)
+   and copy your API key.
+2. Make it available to Maptology, either as an environment variable:
+
+   ```
+   # macOS / Linux
+   export BIOPORTAL_APIKEY=your-key-here
+   # Windows PowerShell
+   $env:BIOPORTAL_APIKEY = "your-key-here"
+   ```
+
+   or by entering it when Maptology asks on the first run.
+
+Your key stays on your computer. Maptology does not send it anywhere except to
+BioPortal, and it is only used to download and update ontologies — not while you
+are searching or mapping.
+
+### What the first run does, and what it costs
+
+The first time you start Maptology it downloads every ontology available in OWL
+format from BioPortal and builds a search index for each one. **This takes a
+while and uses a fair amount of disk space.** After that, ontology searches are
+local and need no network connection at all.
+
+| | |
+|---|---|
+| Ontologies | ~900 |
+| Downloaded | **~15 GB** of ontology files |
+| Search indexes built from them | **~1.6 GB** |
+| Time | Tens of minutes, mostly spent on a handful of very large ontologies |
+
+Most ontologies are small and process in under a second. A few — NCIT, CHEBI,
+PR, GAZ — are around 1 GB each and take a couple of minutes apiece, so the total
+depends heavily on your connection speed. Progress is printed in the terminal,
+and the app opens once processing has finished.
+
+On later runs Maptology only checks which ontologies have new versions on
+BioPortal and updates those, which is much quicker. Requests are spaced out to
+stay within BioPortal's published rate limit of 15 requests per second.
+
+If you would rather not download everything, you can stop the process and
+Maptology will use whatever it has already built.
