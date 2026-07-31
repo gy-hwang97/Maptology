@@ -3,6 +3,7 @@ import pandas as pd
 
 from utils import initialize_session, add_css
 from components import render_header
+from ontology_setup import ensure_ontologies
 from ontology import render_ontology_selection, get_available_ontologies, search_ontology
 from column_mapping import render_column_mapping_section
 from value_mapping import render_value_mapping_section
@@ -11,6 +12,11 @@ from mapping_import import render_import_section
 
 # Streamlit basic page configuration
 st.set_page_config(page_title='Maptology', layout='wide')
+
+# Download and index any ontologies that are new or updated on BioPortal, before
+# the UI renders. Cached per server process, so this is startup work rather than
+# something that repeats on every rerun. Progress is printed to the terminal.
+ensure_ontologies()
 
 # Add CSS styles
 add_css()
