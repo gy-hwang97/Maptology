@@ -154,6 +154,26 @@ def owl_path(acronym):
     return os.path.join(OWL_DIR, acronym + ".owl")
 
 
+def needs_download(ont, local):
+    """Whether this ontology's OWL file has to be fetched again.
+
+    The file on disk is reused only when it is there and was recorded at the
+    submission BioPortal offers now. Deciding this from the file's presence
+    alone is what left changed ontologies frozen: the old bytes were indexed,
+    the new submission id was written against them, and every run afterwards
+    saw the ontology as up to date.
+
+    An ontology whose file is current but whose index is missing is not
+    downloaded again - the index can be rebuilt from bytes that are already
+    right.
+    """
+    acronym = ont["acronym"]
+    if not os.path.exists(owl_path(acronym)):
+        return True
+    have = local.get(acronym) or {}
+    return have.get("submissionId") != ont.get("submissionId")
+
+
 def plan(catalogue, local, only=None, failures=None):
     """Decide what to do with each ontology.
 
@@ -395,7 +415,7 @@ def run(api_key, only=None, limit=0, check_only=False):
     pending = {}
     for _ont, _why in work:
         _acr = _ont["acronym"]
-        if not os.path.exists(owl_path(_acr)):
+        if needs_download(_ont, local):
             pending[_acr] = dl_pool.submit(download_one, _ont, api_key)
 
     counter = {"n": 0}

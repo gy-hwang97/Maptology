@@ -120,6 +120,96 @@ def test_withdrawn_entry_without_its_file_is_dropped(monkeypatch, tmp_path):
     assert "GONE" not in tsv.read_text(encoding="utf-8")
 
 
+def test_a_changed_ontology_is_downloaded_again(monkeypatch, tmp_path):
+    """The whole point of noticing a new submission is to go and get it.
+
+    Reusing the file already on disk would index the old ontology and then
+    record the new submission against it, freezing it at that version forever.
+    """
+    _patch(monkeypatch, tmp_path, built={"BBB"}, owl_present=["BBB"])
+    local = {"BBB": {"submissionId": 8}}          # BioPortal now offers 9
+    ont = _catalogue()[1]
+    assert setup.needs_download(ont, local) is True
+
+
+def test_an_unchanged_file_on_disk_is_reused(monkeypatch, tmp_path):
+    _patch(monkeypatch, tmp_path, built={"BBB"}, owl_present=["BBB"])
+    local = {"BBB": {"submissionId": 9}}
+    assert setup.needs_download(_catalogue()[1], local) is False
+
+
+def test_a_missing_file_is_downloaded(monkeypatch, tmp_path):
+    _patch(monkeypatch, tmp_path, built={"BBB"}, owl_present=[])
+    local = {"BBB": {"submissionId": 9}}
+    assert setup.needs_download(_catalogue()[1], local) is True
+
+
+def test_a_current_file_is_not_refetched_to_rebuild_its_index(monkeypatch, tmp_path):
+    """An index can be rebuilt from bytes that are already correct."""
+    _patch(monkeypatch, tmp_path, built=set(), owl_present=["BBB"])
+    local = {"BBB": {"submissionId": 9}}
+    assert setup.needs_download(_catalogue()[1], local) is False
+
+
+def test_an_ontology_we_never_recorded_is_downloaded(monkeypatch, tmp_path):
+    """A file with no recorded submission cannot be shown to match the catalogue."""
+    _patch(monkeypatch, tmp_path, built={"BBB"}, owl_present=["BBB"])
+    assert setup.needs_download(_catalogue()[1], {}) is True
+
+
+def _run_recording_downloads(monkeypatch, tmp_path, local):
+    """Run the real pipeline against stubs, returning what it downloaded."""
+    downloaded = []
+    saved = {}
+
+    monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
+    monkeypatch.setattr(setup, "TSV_FILE", str(tmp_path / "ontology_list.tsv"))
+    monkeypatch.setattr(setup, "FAILURES_FILE", str(tmp_path / "build_failures.json"))
+    monkeypatch.setattr(setup, "fetch_catalogue", lambda key, only=None: _catalogue())
+    monkeypatch.setattr(setup.versions, "load_local_versions", lambda: dict(local))
+    monkeypatch.setattr(setup.versions, "save_local_versions", saved.update)
+    monkeypatch.setattr(setup.builder, "is_cache_built", lambda a: True)
+    monkeypatch.setattr(setup, "_index", lambda a: 1)
+
+    def fake_download(ont, api_key):
+        downloaded.append(ont["acronym"])
+        (tmp_path / (ont["acronym"] + ".owl")).write_bytes(b"fresh")
+        return 0.1
+
+    monkeypatch.setattr(setup, "download_one", fake_download)
+    setup.run("key")
+    return downloaded, saved
+
+
+def test_run_fetches_a_changed_ontology_rather_than_indexing_stale_bytes(
+        monkeypatch, tmp_path):
+    """The bug this test exists for.
+
+    plan() classified BBB as "fetch", but the executor only queued a download
+    when the OWL file was absent. BBB's old file was indexed and then recorded
+    at submission 9, so every later run saw it as up to date.
+    """
+    for acr in ("AAA", "BBB"):
+        (tmp_path / (acr + ".owl")).write_bytes(b"stale")
+    local = {"AAA": {"submissionId": 5}, "BBB": {"submissionId": 8}}
+
+    downloaded, saved = _run_recording_downloads(monkeypatch, tmp_path, local)
+
+    assert downloaded == ["BBB"], "the changed ontology has to be fetched again"
+    assert (tmp_path / "BBB.owl").read_bytes() == b"fresh"
+    assert saved["BBB"]["submissionId"] == 9
+
+
+def test_run_leaves_up_to_date_ontologies_alone(monkeypatch, tmp_path):
+    for acr in ("AAA", "BBB"):
+        (tmp_path / (acr + ".owl")).write_bytes(b"current")
+    local = {"AAA": {"submissionId": 5}, "BBB": {"submissionId": 9}}
+
+    downloaded, _ = _run_recording_downloads(monkeypatch, tmp_path, local)
+
+    assert downloaded == []
+
+
 def _slot_free(monkeypatch, tmp_path, name, size_bytes):
     """How many heavy slots remain while this ontology is being built."""
     monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
