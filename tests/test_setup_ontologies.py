@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build"))
 
@@ -117,3 +118,43 @@ def test_withdrawn_entry_without_its_file_is_dropped(monkeypatch, tmp_path):
 
     assert n == 1
     assert "GONE" not in tsv.read_text(encoding="utf-8")
+
+
+def _slot_free(monkeypatch, tmp_path, name, size_bytes):
+    """How many heavy slots remain while this ontology is being built."""
+    monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
+    monkeypatch.setattr(setup, "HEAVY_MB", 1)
+    monkeypatch.setattr(setup, "_heavy_slots", threading.Semaphore(2))
+    (tmp_path / (name + ".owl")).write_bytes(b"x" * size_bytes)
+    with setup._build_slot(name):
+        inside = setup._heavy_slots._value
+    return inside, setup._heavy_slots._value
+
+
+def test_a_large_ontology_holds_a_heavy_slot(monkeypatch, tmp_path):
+    """Memory, not cores, is the limit: one worker was measured at 2.7 GB.
+
+    Six of those at once needs more than the 15.4 GB the machine has, so the
+    large ontologies share a small allowance of their own.
+    """
+    inside, after = _slot_free(monkeypatch, tmp_path, "BIG", 2_000_000)
+    assert inside == 1, "a large ontology should occupy one of the two slots"
+    assert after == 2, "the slot should be given back when the build ends"
+
+
+def test_a_small_ontology_does_not_hold_one(monkeypatch, tmp_path):
+    inside, after = _slot_free(monkeypatch, tmp_path, "SMALL", 1000)
+    assert inside == 2 and after == 2
+
+
+def test_the_slot_is_released_even_when_the_build_fails(monkeypatch, tmp_path):
+    monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
+    monkeypatch.setattr(setup, "HEAVY_MB", 1)
+    monkeypatch.setattr(setup, "_heavy_slots", threading.Semaphore(2))
+    (tmp_path / "BIG.owl").write_bytes(b"x" * 2_000_000)
+    try:
+        with setup._build_slot("BIG"):
+            raise RuntimeError("build blew up")
+    except RuntimeError:
+        pass
+    assert setup._heavy_slots._value == 2

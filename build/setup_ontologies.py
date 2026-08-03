@@ -27,10 +27,12 @@ The API key is read from BIOPORTAL_APIKEY, or --apikey, or a prompt.
 """
 
 import argparse
+import contextlib
 import csv
 import json
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -48,8 +50,11 @@ OWL_DIR = os.path.join(_REPO_ROOT, "ontology_cache")
 TSV_FILE = os.path.join(OWL_DIR, "ontology_list.tsv")
 FAILURES_FILE = os.path.join(OWL_DIR, "build_failures.json")
 
-# BioPortal documents a limit of 15 requests per second per IP. Stay well under
-# it: this script is a background chore, not something anyone is waiting on.
+# BioPortal documents a limit of 15 requests per second per API key. Stay well
+# under it: this script is a background chore, not something anyone is waiting
+# on. Small files finish in a fraction of a second, so several connections can
+# start requests far faster than the average rate suggests; the limit has to be
+# enforced on the request rate itself, not inferred from the connection count.
 REQUEST_INTERVAL = 0.12
 
 # Downloads run several at a time. BioPortal gives about 4.7 MB/s down a single
@@ -58,6 +63,54 @@ REQUEST_INTERVAL = 0.12
 # available gain while staying below what a browser opens to one host, which
 # matters for a free academic service. Override with MAPTOLOGY_DOWNLOAD_WORKERS.
 DOWNLOAD_WORKERS = int(os.environ.get("MAPTOLOGY_DOWNLOAD_WORKERS", "4"))
+
+# Indexing runs several ontologies at once. Each one is a separate subprocess
+# that has to import scikit-learn, scipy and pandas before it can do anything,
+# which costs about 2.3 seconds - roughly 38 minutes across a thousand
+# ontologies, spent entirely on start-up. Running them concurrently divides that
+# down. Capped rather than using every core because each worker holds a parsed
+# ontology in memory and the largest need a few GB.
+def _default_build_workers():
+    try:
+        cores = os.cpu_count() or 2
+    except NotImplementedError:
+        cores = 2
+    return max(1, min(6, cores - 1))
+
+
+BUILD_WORKERS = int(os.environ.get("MAPTOLOGY_BUILD_WORKERS", "0")) or _default_build_workers()
+
+# Cores are not the limit here, memory is. A worker holds the whole parsed
+# ontology: one was measured at 2.7 GB on a 91 MB file, and the largest are ten
+# times that size on disk. Six of those at once needs more memory than an
+# ordinary machine has - 16 GB against the 15.4 GB of the machine this was
+# measured on - and the run would start swapping instead of indexing.
+#
+# So the big ones get a small allowance of their own while the remaining workers
+# carry on with small files, which is what the whole corpus was measured under.
+# The threshold is on the size after decompression, since an archive says
+# nothing useful about what it holds.
+HEAVY_MB = 50
+HEAVY_WORKERS = int(os.environ.get("MAPTOLOGY_HEAVY_WORKERS", "0")) or 2
+_heavy_slots = threading.Semaphore(HEAVY_WORKERS)
+
+
+@contextlib.contextmanager
+def _build_slot(acronym):
+    """Hold a heavy-build slot for as long as this ontology needs one."""
+    path = owl_path(acronym)
+    heavy = False
+    try:
+        heavy = os.path.exists(path) and builder.uncompressed_size_mb(path) > HEAVY_MB
+    except OSError:
+        heavy = False
+    if heavy:
+        _heavy_slots.acquire()
+    try:
+        yield
+    finally:
+        if heavy:
+            _heavy_slots.release()
 
 
 def get_api_key(from_arg=None):
@@ -192,8 +245,16 @@ def fetch_catalogue(api_key, only=None):
 
 
 def download_one(ont, api_key):
-    """Download a single ontology's OWL file. Written to a temp name and moved
-    into place, so an interrupted download cannot be mistaken for a good file."""
+    """Download a single ontology's OWL file.
+
+    Written to a temp name and moved into place only once the response has been
+    checked against the length the server promised. Writing to a temp name was
+    never enough on its own: a response that stops early ends iter_content
+    without raising, so the short file was renamed over the good one and looked
+    finished. That is how PR, GAZ and CHEBI came to sit on disk at 1.0007 GiB
+    each, ending in the middle of an XML element - BioPortal cuts its RDF
+    conversion off there, and nothing here noticed.
+    """
     acronym = ont["acronym"]
     dest = owl_path(acronym)
     tmp = dest + ".part"
@@ -205,9 +266,34 @@ def download_one(ont, api_key):
     if resp.status_code != 200:
         raise RuntimeError("HTTP %d" % resp.status_code)
     os.makedirs(OWL_DIR, exist_ok=True)
-    with open(tmp, "wb") as fh:
-        for chunk in resp.iter_content(chunk_size=1 << 16):
-            fh.write(chunk)
+    written = 0
+    try:
+        with open(tmp, "wb") as fh:
+            for chunk in resp.iter_content(chunk_size=1 << 16):
+                fh.write(chunk)
+                written += len(chunk)
+
+        # Content-Length describes the bytes on the wire. When the response is
+        # compressed those are not the bytes we just wrote, so there is nothing
+        # to compare; the same goes for chunked responses, which send no length.
+        promised = resp.headers.get("Content-Length")
+        if promised is not None and not resp.headers.get("Content-Encoding"):
+            try:
+                promised = int(promised)
+            except (TypeError, ValueError):
+                promised = None
+            if promised is not None and written != promised:
+                raise RuntimeError(
+                    "incomplete download: got %d bytes, server said %d"
+                    % (written, promised))
+    except BaseException:
+        # Leave no half-written file behind, and leave any working copy alone.
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
     os.replace(tmp, dest)
     return os.path.getsize(dest) / 1e6
 
@@ -231,9 +317,10 @@ def _existing_rows():
 def _index(acronym):
     """Build the TF-IDF index for one ontology. Returns the term count."""
     path = owl_path(acronym)
-    builder.cleanup_partial_cache(acronym)
-    method, n, dep, n_def, n_syn, shape = builder.build_one_with_timeout(
-        acronym, path, os.path.getsize(path) / 1e6)
+    with _build_slot(acronym):
+        builder.cleanup_partial_cache(acronym)
+        method, n, dep, n_def, n_syn, shape = builder.build_one_with_timeout(
+            acronym, path, os.path.getsize(path) / 1e6)
     return n
 
 
@@ -297,33 +384,29 @@ def run(api_key, only=None, limit=0, check_only=False):
               "is kept and the next run continues.\n")
 
     done = failed = 0
-    # Fetch ahead on several connections while indexing proceeds one at a time.
-    # One connection tops out around 4.7 MB/s whatever the file size, so
-    # downloading in lockstep with indexing left most of the bandwidth idle;
-    # four connections measured 12.4 MB/s. Indexing stays sequential because it
-    # is CPU-bound and already runs in its own subprocess.
-    pool = ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS)
+    lock = threading.Lock()
+
+    # Downloads run on their own connections; indexing runs on its own workers.
+    # A single connection tops out near 4.7 MB/s whatever the file size, and a
+    # single indexing worker leaves most of a multi-core machine idle while it
+    # pays a ~2.3 second import cost per ontology. Both phases overlap, so the
+    # run takes about as long as the slower of the two rather than their sum.
+    dl_pool = ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS)
     pending = {}
     for _ont, _why in work:
         _acr = _ont["acronym"]
         if not os.path.exists(owl_path(_acr)):
-            pending[_acr] = pool.submit(download_one, _ont, api_key)
+            pending[_acr] = dl_pool.submit(download_one, _ont, api_key)
 
-    for i, (ont, why) in enumerate(work, start=1):
+    counter = {"n": 0}
+
+    def process(ont):
         acronym = ont["acronym"]
-        head = "[%d/%d] %-14s" % (i, len(work), acronym)
         try:
             future = pending.get(acronym)
             reused = future is None
             if not reused:
-                print(head + " downloading...", end="", flush=True)
-                mb = future.result()
-                print(" %.1f MB" % mb, end="", flush=True)
-            else:
-                print(head + " have file", end="", flush=True)
-
-            print(", indexing...", end="", flush=True)
-            t0 = time.time()
+                future.result()
             try:
                 n = _index(acronym)
             except Exception:
@@ -333,33 +416,43 @@ def run(api_key, only=None, limit=0, check_only=False):
                 # before giving up.
                 if not reused:
                     raise
-                print(" stale file, re-downloading...", end="", flush=True)
                 os.remove(owl_path(acronym))
-                mb = download_one(ont, api_key)
-                print(" %.1f MB, indexing..." % mb, end="", flush=True)
-                time.sleep(REQUEST_INTERVAL)
+                download_one(ont, api_key)
                 n = _index(acronym)
-            print(" %d terms (%.0fs)" % (n, time.time() - t0))
-
-            # Record the submission only once the build actually succeeded, so a
-            # failed attempt is retried next run rather than looking current.
-            local[acronym] = {"submissionId": ont.get("submissionId"),
-                              "version": ont.get("version"),
-                              "released": ont.get("released")}
-            versions.save_local_versions(local)
-            done += 1
-        except KeyboardInterrupt:
-            print("\n\nStopped. %d finished; run again to continue." % done)
-            # Drop queued downloads rather than making the user wait them out.
-            pool.shutdown(wait=False, cancel_futures=True)
-            break
+            with lock:
+                counter["n"] += 1
+                local[acronym] = {"submissionId": ont.get("submissionId"),
+                                  "version": ont.get("version"),
+                                  "released": ont.get("released")}
+                versions.save_local_versions(local)
+                print("[%d/%d] %-14s %d terms"
+                      % (counter["n"], len(work), acronym, n), flush=True)
+            return True
         except Exception as e:
-            print(" FAILED: %s: %s" % (type(e).__name__, str(e)[:70]))
-            failures[acronym] = ont.get("submissionId")
-            save_failures(failures)
-            failed += 1
+            with lock:
+                counter["n"] += 1
+                failures[acronym] = ont.get("submissionId")
+                save_failures(failures)
+                print("[%d/%d] %-14s FAILED: %s: %s"
+                      % (counter["n"], len(work), acronym,
+                         type(e).__name__, str(e)[:60]), flush=True)
+            return False
 
-    pool.shutdown(wait=False, cancel_futures=True)
+    build_pool = ThreadPoolExecutor(max_workers=BUILD_WORKERS)
+    print("indexing %d at a time on %d cores\n" % (BUILD_WORKERS, os.cpu_count() or 1))
+    try:
+        for succeeded in build_pool.map(process, [o for o, _ in work]):
+            if succeeded:
+                done += 1
+            else:
+                failed += 1
+    except KeyboardInterrupt:
+        print("\n\nStopped. %d finished; run again to continue." % done)
+    finally:
+        # Drop queued work rather than making the user wait it out.
+        dl_pool.shutdown(wait=False, cancel_futures=True)
+        build_pool.shutdown(wait=False, cancel_futures=True)
+
     listed = write_catalogue_tsv(catalogue)
     print("\n%d ontologies ready for searching." % listed)
     if failed:
