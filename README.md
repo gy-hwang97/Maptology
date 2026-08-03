@@ -85,29 +85,37 @@ local and need no network connection at all.
 | Ontologies | ~1,000 |
 | Downloaded | **~15 GB** of ontology files |
 | Search indexes built from them | **~1.6 GB** |
-| Downloading | **~30 minutes** |
-| Building the indexes | **~75 minutes** |
-| **Total, once** | **roughly 1 hour 45 minutes** |
+| Time spent downloading | **~30 minutes** |
+| Time spent building indexes | **~75 minutes** |
+
+The two phases overlap — indexing starts on each ontology as soon as its file
+lands — so the run does not cost the sum of those two figures. It costs roughly
+the longer of them, which makes indexing the part that decides how long you
+wait. Every run now writes its spans to `run_log.jsonl` next to the ontology
+files, so the wall clock for your own machine comes from the log rather than
+from adding the phases up.
 
 Two things are worth knowing before you start it.
 
 **A faster internet connection may not help much.** A single connection to
-BioPortal runs at about 4.7 MB/s whatever the file size, so Maptology downloads
-several at once (12.4 MB/s over four connections in testing). Beyond that,
-BioPortal's server rather than your connection sets the pace.
+BioPortal moved about 4.7 MB/s whatever the file size when we measured it, so
+Maptology downloads several at once (12.4 MB/s over four connections, 15.4 MB/s
+over eight). These are figures from one machine on one network in South Korea;
+we have not established where the ceiling comes from, and it could be
+BioPortal, the path, or this end. Treat them as what to expect here, not as a
+property of BioPortal.
 
 **Building the indexes takes longer than downloading them** — about two and a
 half times as long in our measurements. The cost comes from the number of
 ontologies rather than their size, because each one carries a fixed start-up
-cost; the handful of very large ones (NCIT, CHEBI, PR, GAZ, around 1 GB each)
-are only a couple of minutes apiece.
+cost; the handful of very large ones are only a couple of minutes apiece.
 
 Progress is printed in the terminal, and the app opens once processing has
 finished. A few ontologies are published in formats Maptology cannot read; those
 are recorded and skipped rather than retried on every start.
 
 On later runs Maptology only checks which ontologies have new versions on
-BioPortal and updates those, which is much quicker. Requests are spaced out to
+BioPortal and downloads those, which is much quicker. Requests are spaced out to
 stay within BioPortal's published rate limit of 15 requests per second.
 
 If you would rather not download everything, you can stop the process and

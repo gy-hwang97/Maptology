@@ -49,6 +49,10 @@ API_BASE = "https://data.bioontology.org"
 OWL_DIR = os.path.join(_REPO_ROOT, "ontology_cache")
 TSV_FILE = os.path.join(OWL_DIR, "ontology_list.tsv")
 FAILURES_FILE = os.path.join(OWL_DIR, "build_failures.json")
+# One line per download, per index and per run. Spans, not totals: what a run
+# costs depends on how far the two phases overlap, and that cannot be recovered
+# from a remembered figure afterwards.
+RUN_LOG = os.path.join(OWL_DIR, "run_log.jsonl")
 
 # BioPortal documents a limit of 15 requests per second per API key. Stay well
 # under it: this script is a background chore, not something anyone is waiting
@@ -152,6 +156,55 @@ def save_failures(failures):
 
 def owl_path(acronym):
     return os.path.join(OWL_DIR, acronym + ".owl")
+
+
+_log_lock = threading.Lock()
+
+
+def _log_event(kind, **fields):
+    """Append one event to the run log.
+
+    Best effort on purpose: a build must not fail because its own measurements
+    could not be written down.
+    """
+    try:
+        directory = os.path.dirname(RUN_LOG)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with _log_lock, open(RUN_LOG, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(dict(fields, kind=kind), sort_keys=True) + "\n")
+    except OSError:
+        pass
+
+
+def _timed_download(ont, api_key):
+    """download_one, with the span and the outcome written to the run log."""
+    start = time.monotonic()
+    try:
+        megabytes = download_one(ont, api_key)
+    except BaseException as e:
+        _log_event("download", acronym=ont["acronym"], start=start,
+                   end=time.monotonic(), ok=False,
+                   error="%s: %s" % (type(e).__name__, str(e)[:200]))
+        raise
+    _log_event("download", acronym=ont["acronym"], start=start,
+               end=time.monotonic(), ok=True, megabytes=megabytes,
+               submission=ont.get("submissionId"),
+               download_format=ont.get("download_format"))
+    return megabytes
+
+
+def _timed_index(acronym):
+    start = time.monotonic()
+    try:
+        terms = _index(acronym)
+    except BaseException as e:
+        _log_event("index", acronym=acronym, start=start, end=time.monotonic(),
+                   ok=False, error="%s: %s" % (type(e).__name__, str(e)[:200]))
+        raise
+    _log_event("index", acronym=acronym, start=start, end=time.monotonic(),
+               ok=True, terms=terms)
+    return terms
 
 
 _rate_lock = threading.Lock()
@@ -400,6 +453,7 @@ def write_catalogue_tsv(entries):
 
 
 def run(api_key, only=None, limit=0, check_only=False):
+    run_started = time.monotonic()
     catalogue = fetch_catalogue(api_key, only)
     local = versions.load_local_versions()
     failures = load_failures()
@@ -436,7 +490,7 @@ def run(api_key, only=None, limit=0, check_only=False):
     for _ont, _why in work:
         _acr = _ont["acronym"]
         if needs_download(_ont, local):
-            pending[_acr] = dl_pool.submit(download_one, _ont, api_key)
+            pending[_acr] = dl_pool.submit(_timed_download, _ont, api_key)
 
     counter = {"n": 0}
 
@@ -448,7 +502,7 @@ def run(api_key, only=None, limit=0, check_only=False):
             if not reused:
                 future.result()
             try:
-                n = _index(acronym)
+                n = _timed_index(acronym)
             except Exception:
                 # A file left over from an earlier run can be truncated, or in a
                 # format we asked BioPortal not to send. Retrying the same bytes
@@ -457,8 +511,8 @@ def run(api_key, only=None, limit=0, check_only=False):
                 if not reused:
                     raise
                 os.remove(owl_path(acronym))
-                download_one(ont, api_key)
-                n = _index(acronym)
+                _timed_download(ont, api_key)
+                n = _timed_index(acronym)
             with lock:
                 counter["n"] += 1
                 local[acronym] = {"submissionId": ont.get("submissionId"),
@@ -492,6 +546,11 @@ def run(api_key, only=None, limit=0, check_only=False):
         # Drop queued work rather than making the user wait it out.
         dl_pool.shutdown(wait=False, cancel_futures=True)
         build_pool.shutdown(wait=False, cancel_futures=True)
+
+    _log_event("run", start=run_started, end=time.monotonic(), epoch=time.time(),
+               planned=len(work), done=done, failed=failed,
+               download_workers=DOWNLOAD_WORKERS, build_workers=BUILD_WORKERS,
+               request_interval=REQUEST_INTERVAL)
 
     listed = write_catalogue_tsv(catalogue)
     print("\n%d ontologies ready for searching." % listed)

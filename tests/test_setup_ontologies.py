@@ -262,6 +262,59 @@ def test_download_one_takes_a_rate_limit_slot(monkeypatch, tmp_path):
     assert taken == [1], "the download went out without waiting for a slot"
 
 
+def _read_run_log(tmp_path):
+    import json
+    path = tmp_path / "run_log.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in
+            path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_the_run_log_times_each_download_and_index(monkeypatch, tmp_path):
+    """Raw spans, not a remembered total.
+
+    The README says downloading and indexing add up to 1h45m; the code says
+    they overlap and the run costs about the slower of the two. Only recorded
+    spans can settle that, and the same spans are what a measurement writeup
+    needs.
+    """
+    monkeypatch.setattr(setup, "RUN_LOG", str(tmp_path / "run_log.jsonl"))
+    for acr in ("AAA", "BBB"):
+        (tmp_path / (acr + ".owl")).write_bytes(b"stale")
+    local = {"AAA": {"submissionId": 5}, "BBB": {"submissionId": 8}}
+
+    _run_recording_downloads(monkeypatch, tmp_path, local)
+
+    events = _read_run_log(tmp_path)
+    kinds = {(e["kind"], e.get("acronym")) for e in events}
+    assert ("download", "BBB") in kinds
+    assert ("index", "BBB") in kinds
+    # AAA is at the submission BioPortal offers, so it is skipped outright:
+    # neither fetched nor rebuilt.
+    assert ("download", "AAA") not in kinds
+    assert ("index", "AAA") not in kinds
+
+    for e in events:
+        if e["kind"] in ("download", "index"):
+            assert e["end"] >= e["start"]
+
+
+def test_the_run_log_records_the_whole_run(monkeypatch, tmp_path):
+    """Wall clock has to come from the run itself, not from summing the parts."""
+    monkeypatch.setattr(setup, "RUN_LOG", str(tmp_path / "run_log.jsonl"))
+    (tmp_path / "AAA.owl").write_bytes(b"x")
+    (tmp_path / "BBB.owl").write_bytes(b"x")
+    local = {"AAA": {"submissionId": 5}, "BBB": {"submissionId": 9}}
+
+    _run_recording_downloads(monkeypatch, tmp_path, local)
+
+    runs = [e for e in _read_run_log(tmp_path) if e["kind"] == "run"]
+    assert len(runs) == 1
+    assert runs[0]["end"] >= runs[0]["start"]
+    assert runs[0]["download_workers"] == setup.DOWNLOAD_WORKERS
+
+
 def _slot_free(monkeypatch, tmp_path, name, size_bytes):
     """How many heavy slots remain while this ontology is being built."""
     monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
