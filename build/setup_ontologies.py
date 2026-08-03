@@ -154,6 +154,25 @@ def owl_path(acronym):
     return os.path.join(OWL_DIR, acronym + ".owl")
 
 
+_rate_lock = threading.Lock()
+_next_request_at = 0.0
+
+
+def _rate_limit():
+    """Block until BioPortal may be asked for something again.
+
+    Each caller claims the next free slot and waits for it outside the lock, so
+    the threads spread out instead of queueing behind one another's sleeps.
+    """
+    global _next_request_at
+    with _rate_lock:
+        now = time.monotonic()
+        wait = _next_request_at - now
+        _next_request_at = max(now, _next_request_at) + REQUEST_INTERVAL
+    if wait > 0:
+        time.sleep(wait)
+
+
 def needs_download(ont, local):
     """Whether this ontology's OWL file has to be fetched again.
 
@@ -282,6 +301,7 @@ def download_one(ont, api_key):
     params = {} if ont.get("native_format") == "OWL" else {"download_format": "rdf"}
     headers = {"Authorization": "apikey token=" + api_key}
 
+    _rate_limit()
     resp = requests.get(url, headers=headers, params=params, timeout=300, stream=True)
     if resp.status_code != 200:
         raise RuntimeError("HTTP %d" % resp.status_code)

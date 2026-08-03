@@ -1,6 +1,7 @@
 import os
 import sys
 import threading
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build"))
 
@@ -208,6 +209,57 @@ def test_run_leaves_up_to_date_ontologies_alone(monkeypatch, tmp_path):
     downloaded, _ = _run_recording_downloads(monkeypatch, tmp_path, local)
 
     assert downloaded == []
+
+
+def test_requests_are_spaced_out_across_download_threads(monkeypatch):
+    """BioPortal allows 15 requests a second per key; four threads can beat that.
+
+    Several connections each start a request the moment their last file lands,
+    so the gap has to be enforced on the requests themselves rather than
+    inferred from how many connections are open.
+    """
+    monkeypatch.setattr(setup, "REQUEST_INTERVAL", 0.05)
+    monkeypatch.setattr(setup, "_next_request_at", 0.0)
+    stamps, lock = [], threading.Lock()
+
+    def hit():
+        setup._rate_limit()
+        with lock:
+            stamps.append(time.monotonic())
+
+    threads = [threading.Thread(target=hit) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    stamps.sort()
+    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+    assert len(gaps) == 5
+    assert min(gaps) >= 0.04, "requests went out closer together than the limit"
+
+
+def _fake_ok_response(body=b"<rdf/>"):
+    class Resp:
+        status_code = 200
+        headers = {"Content-Length": str(len(body))}
+
+        def iter_content(self, chunk_size=1):
+            yield body
+    return Resp()
+
+
+def test_download_one_takes_a_rate_limit_slot(monkeypatch, tmp_path):
+    """A limit that nothing calls is documentation, not a limit."""
+    monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
+    taken = []
+    monkeypatch.setattr(setup, "_rate_limit", lambda: taken.append(1))
+    monkeypatch.setattr(setup.requests, "get",
+                        lambda *a, **k: _fake_ok_response())
+
+    setup.download_one({"acronym": "AAA", "native_format": "OWL"}, "key")
+
+    assert taken == [1], "the download went out without waiting for a slot"
 
 
 def _slot_free(monkeypatch, tmp_path, name, size_bytes):
