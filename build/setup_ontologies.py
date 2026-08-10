@@ -49,6 +49,12 @@ API_BASE = "https://data.bioontology.org"
 OWL_DIR = os.path.join(_REPO_ROOT, "ontology_cache")
 TSV_FILE = os.path.join(OWL_DIR, "ontology_list.tsv")
 FAILURES_FILE = os.path.join(OWL_DIR, "build_failures.json")
+# The BioPortal catalogue as of the last time it was asked. Lazy loading needs
+# the full list to offer ontologies that are not downloaded yet, and keeping it
+# on disk is what lets the app go back to BioPortal only every CATALOGUE_MAX_AGE
+# days instead of on every start.
+CATALOGUE_FILE = os.path.join(OWL_DIR, "bioportal_catalogue.json")
+CATALOGUE_MAX_AGE_DAYS = 30
 # One line per download, per index and per run. Spans, not totals: what a run
 # costs depends on how far the two phases overlap, and that cannot be recovered
 # from a remembered figure afterwards.
@@ -336,6 +342,84 @@ def fetch_catalogue(api_key, only=None):
     return out
 
 
+def save_catalogue(catalogue):
+    os.makedirs(OWL_DIR, exist_ok=True)
+    tmp = CATALOGUE_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump({"fetched_at": time.time(), "ontologies": catalogue}, fh)
+    os.replace(tmp, CATALOGUE_FILE)
+
+
+def load_saved_catalogue(max_age_days=None):
+    """The catalogue from the last fetch, or None when there is none or it is
+    older than max_age_days. Age is judged here so that callers cannot forget
+    to."""
+    if not os.path.exists(CATALOGUE_FILE):
+        return None
+    try:
+        with open(CATALOGUE_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        catalogue = data["ontologies"]
+        fetched_at = float(data["fetched_at"])
+    except (ValueError, KeyError, TypeError, OSError):
+        return None
+    if max_age_days is not None:
+        if time.time() - fetched_at > max_age_days * 86400:
+            return None
+    return catalogue
+
+
+def get_catalogue(api_key, max_age_days=CATALOGUE_MAX_AGE_DAYS):
+    """The BioPortal catalogue, going to the network at most every
+    max_age_days. This is the periodic check the professor asked for: once an
+    ontology is downloaded, nobody should wait on BioPortal again for a month.
+    """
+    catalogue = load_saved_catalogue(max_age_days)
+    if catalogue is not None:
+        return catalogue
+    catalogue = fetch_catalogue(api_key)
+    save_catalogue(catalogue)
+    return catalogue
+
+
+def setup_one(ont, api_key):
+    """Download and index a single ontology, on demand.
+
+    This is what lazy loading calls when someone selects an ontology that is
+    not on disk yet (or whose submission has moved on). Same steps as one item
+    of run(): fetch if the bytes are stale or missing, index, and record the
+    submission only after the index actually built. Returns the term count;
+    raises on failure so the caller can show why.
+    """
+    acronym = ont["acronym"]
+    local = versions.load_local_versions()
+    failures = load_failures()
+    try:
+        reused = not needs_download(ont, local)
+        if not reused:
+            _timed_download(ont, api_key)
+        try:
+            n = _timed_index(acronym)
+        except Exception:
+            # A file already on disk can be truncated or in a format we asked
+            # BioPortal not to send; fetch it once more before giving up.
+            if not reused:
+                raise
+            os.remove(owl_path(acronym))
+            _timed_download(ont, api_key)
+            n = _timed_index(acronym)
+    except Exception:
+        failures[acronym] = ont.get("submissionId")
+        save_failures(failures)
+        raise
+    local[acronym] = {"submissionId": ont.get("submissionId"),
+                      "version": ont.get("version"),
+                      "released": ont.get("released")}
+    versions.save_local_versions(local)
+    write_catalogue_tsv([ont])
+    return n
+
+
 def download_one(ont, api_key):
     """Download a single ontology's OWL file.
 
@@ -455,6 +539,10 @@ def write_catalogue_tsv(entries):
 def run(api_key, only=None, limit=0, check_only=False):
     run_started = time.monotonic()
     catalogue = fetch_catalogue(api_key, only)
+    if not only:
+        # The app's selection list is drawn from this file; keep it current
+        # whenever the full catalogue was fetched anyway.
+        save_catalogue(catalogue)
     local = versions.load_local_versions()
     failures = load_failures()
     todo = plan(catalogue, local, only, failures)

@@ -166,6 +166,11 @@ def _run_recording_downloads(monkeypatch, tmp_path, local):
     monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
     monkeypatch.setattr(setup, "TSV_FILE", str(tmp_path / "ontology_list.tsv"))
     monkeypatch.setattr(setup, "FAILURES_FILE", str(tmp_path / "build_failures.json"))
+    # run() saves the catalogue it fetched; without this the test catalogue
+    # would land in the real ontology_cache and the app would then offer two
+    # made-up ontologies.
+    monkeypatch.setattr(setup, "CATALOGUE_FILE",
+                        str(tmp_path / "bioportal_catalogue.json"))
     monkeypatch.setattr(setup, "fetch_catalogue", lambda key, only=None: _catalogue())
     monkeypatch.setattr(setup.versions, "load_local_versions", lambda: dict(local))
     monkeypatch.setattr(setup.versions, "save_local_versions", saved.update)
@@ -353,3 +358,116 @@ def test_the_slot_is_released_even_when_the_build_fails(monkeypatch, tmp_path):
     except RuntimeError:
         pass
     assert setup._heavy_slots._value == 2
+
+
+# ---------------------------------------------------------------------------
+# The saved catalogue and its 30-day freshness gate (lazy loading).
+# ---------------------------------------------------------------------------
+
+def _patch_catalogue_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(setup, "OWL_DIR", str(tmp_path))
+    monkeypatch.setattr(setup, "CATALOGUE_FILE",
+                        str(tmp_path / "bioportal_catalogue.json"))
+
+
+def test_saved_catalogue_round_trips(monkeypatch, tmp_path):
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    setup.save_catalogue(_catalogue())
+    assert setup.load_saved_catalogue() == _catalogue()
+
+
+def test_missing_catalogue_reads_as_none(monkeypatch, tmp_path):
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    assert setup.load_saved_catalogue() is None
+
+
+def test_stale_catalogue_reads_as_none(monkeypatch, tmp_path):
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    setup.save_catalogue(_catalogue())
+    # Pretend the fetch happened 31 days ago.
+    monkeypatch.setattr(setup.time, "time",
+                        lambda real=setup.time.time: real() + 31 * 86400)
+    assert setup.load_saved_catalogue(max_age_days=30) is None
+
+
+def test_get_catalogue_uses_the_saved_copy_within_30_days(monkeypatch, tmp_path):
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    setup.save_catalogue(_catalogue())
+
+    def must_not_fetch(api_key, only=None):
+        raise AssertionError("went to BioPortal despite a fresh catalogue")
+
+    monkeypatch.setattr(setup, "fetch_catalogue", must_not_fetch)
+    assert setup.get_catalogue("key") == _catalogue()
+
+
+def test_get_catalogue_refetches_after_30_days(monkeypatch, tmp_path):
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    setup.save_catalogue([{"acronym": "OLD"}])
+    monkeypatch.setattr(setup.time, "time",
+                        lambda real=setup.time.time: real() + 31 * 86400)
+    monkeypatch.setattr(setup, "fetch_catalogue", lambda api_key, only=None: _catalogue())
+    assert setup.get_catalogue("key") == _catalogue()
+    # ...and the fresh copy was saved for the next 30 days.
+    assert setup.load_saved_catalogue(max_age_days=30) == _catalogue()
+
+
+# ---------------------------------------------------------------------------
+# setup_one: what a single lazy selection does.
+# ---------------------------------------------------------------------------
+
+def _patch_setup_one(monkeypatch, tmp_path, downloads, indexes, index_ok=True):
+    """Route setup_one's collaborators into tmp_path and record calls."""
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    monkeypatch.setattr(setup, "TSV_FILE", str(tmp_path / "ontology_list.tsv"))
+    monkeypatch.setattr(setup, "FAILURES_FILE", str(tmp_path / "failures.json"))
+    store = {}
+    monkeypatch.setattr(setup.versions, "load_local_versions", lambda: dict(store))
+    monkeypatch.setattr(setup.versions, "save_local_versions",
+                        lambda v: (store.clear(), store.update(v)))
+
+    def fake_download(ont, api_key):
+        downloads.append(ont["acronym"])
+        (tmp_path / (ont["acronym"] + ".owl")).write_bytes(b"owl")
+        return 1.0
+
+    def fake_index(acronym):
+        indexes.append(acronym)
+        if not index_ok:
+            raise RuntimeError("no parser could read this file")
+        return 42
+
+    monkeypatch.setattr(setup, "_timed_download", fake_download)
+    monkeypatch.setattr(setup, "_timed_index", fake_index)
+    return store
+
+
+def test_setup_one_downloads_indexes_and_records(monkeypatch, tmp_path):
+    downloads, indexes = [], []
+    store = _patch_setup_one(monkeypatch, tmp_path, downloads, indexes)
+
+    n = setup.setup_one(_catalogue()[0], "key")
+
+    assert n == 42
+    assert downloads == ["AAA"] and indexes == ["AAA"]
+    # The submission is recorded, so the next check sees it as current...
+    assert store["AAA"]["submissionId"] == 5
+    # ...and the app's list now offers it.
+    assert "AAA" in (tmp_path / "ontology_list.tsv").read_text(encoding="utf-8")
+
+
+def test_setup_one_failure_records_nothing_current(monkeypatch, tmp_path):
+    downloads, indexes = [], []
+    store = _patch_setup_one(monkeypatch, tmp_path, downloads, indexes,
+                             index_ok=False)
+    try:
+        setup.setup_one(_catalogue()[0], "key")
+        raised = False
+    except RuntimeError:
+        raised = True
+
+    assert raised
+    # No version recorded: the next attempt must not think it is up to date.
+    assert "AAA" not in store
+    # The unreadable submission is remembered so it is not retried forever.
+    assert setup.load_failures().get("AAA") == 5

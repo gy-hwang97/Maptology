@@ -1,19 +1,56 @@
 import streamlit as st
 import pandas as pd
 from tfidf_search import get_ontology_list_from_tsv, search_local
+from ontology_setup import catalogue_entries, recorded_submissions, install_ontology
 
 
 # Load the ontology catalog once per server process.
-# The catalog is static (it only changes when the TF-IDF caches are rebuilt),
-# so @st.cache_data computes it a single time and shares the result across
-# every session, rerun, and user - no need to rebuild it on each page load.
+# @st.cache_data computes it a single time and shares the result across every
+# session, rerun, and user; it is cleared explicitly when a new ontology is
+# downloaded, which is the only time it changes.
 @st.cache_data(show_spinner=False)
 def _load_ontology_catalog():
-    return get_ontology_list_from_tsv()
+    """Everything the selection list can offer.
+
+    Two sources, merged: ontologies already downloaded and indexed on this
+    machine, and the saved BioPortal catalogue, so an ontology can be chosen
+    before it is downloaded - selecting it is what downloads it. Each entry
+    carries `downloaded`, and `update_available` when the local index was built
+    from an older BioPortal submission than the catalogue now offers.
+    """
+    built = {o["acronym"]: o for o in get_ontology_list_from_tsv()}
+    catalogue = catalogue_entries()
+    recorded = recorded_submissions()
+
+    merged = []
+    for acronym, entry in catalogue.items():
+        downloaded = acronym in built
+        merged.append({
+            "acronym": acronym,
+            "name": entry.get("name") or acronym,
+            "description": "",
+            "downloaded": downloaded,
+            "update_available": downloaded
+                and recorded.get(acronym) != entry.get("submissionId"),
+        })
+    # Ontologies built locally that BioPortal no longer lists (this happens:
+    # CMEO, CVO and HTO were withdrawn from its catalogue). They keep working;
+    # there is just nothing to update them from.
+    for acronym, entry in built.items():
+        if acronym not in catalogue:
+            merged.append({
+                "acronym": acronym,
+                "name": entry.get("name") or acronym,
+                "description": "",
+                "downloaded": True,
+                "update_available": False,
+            })
+    merged.sort(key=lambda x: x["acronym"])
+    return merged
 
 
-# Get list of available ontologies from local TSV file
-# (replaces BioPortal API call)
+# Get list of available ontologies (local caches merged with the saved
+# BioPortal catalogue; replaces the old per-request BioPortal API call)
 def get_available_ontologies():
     if not st.session_state.available_ontologies:
         ontology_list = _load_ontology_catalog()
@@ -21,7 +58,9 @@ def get_available_ontologies():
         if len(ontology_list) > 0:
             st.session_state.available_ontologies = ontology_list
         else:
-            st.error("Error: Could not load ontology list from TSV file.")
+            st.error("Error: no ontologies are available yet. Set "
+                     "BIOPORTAL_APIKEY and restart Maptology to fetch the "
+                     "BioPortal catalogue.")
             st.session_state.available_ontologies = []
 
     return st.session_state.available_ontologies
@@ -271,6 +310,16 @@ def render_ontology_selection(available_ontologies):
         else:
             st.warning("Please select at least one ontology to proceed.")
 
+    # A download attempted on the previous rerun may have failed; the message
+    # has to survive that rerun, so it travels through session state.
+    install_error = st.session_state.pop("ontology_install_error", None)
+    if install_error:
+        st.error(install_error)
+
+    st.caption("Ontologies not yet on this machine are downloaded from "
+               "BioPortal the first time you select them - a few seconds for "
+               "most, a couple of minutes for the largest.")
+
     # Search filtering
     filter_query = st.text_input("Filter ontologies", placeholder="Type to filter...")
 
@@ -305,8 +354,16 @@ def render_ontology_selection(available_ontologies):
                 # Check maximum selection limit
                 is_disabled = (current_count >= max_count and not is_checked)
 
+                # Say up front which selections will cost a download, so the
+                # wait that follows is never a surprise.
+                label = acronym + " - " + name
+                if not ont.get("downloaded", True):
+                    label += "  (not downloaded yet)"
+                elif ont.get("update_available"):
+                    label += "  (update available)"
+
                 checkbox = st.checkbox(
-                    acronym + " - " + name,
+                    label,
                     value=is_checked,
                     key="ont_" + acronym + "_" + str(st.session_state.get("ontology_widget_version", 0)),
                     help=tooltip,
@@ -316,6 +373,28 @@ def render_ontology_selection(available_ontologies):
                 # Update checkbox state
                 if checkbox and acronym not in st.session_state.selected_ontologies:
                     if len(st.session_state.selected_ontologies) < max_count:
+                        # Lazy loading: selecting an ontology is what fetches
+                        # it. Also refreshes one whose BioPortal submission has
+                        # moved on since it was built.
+                        if not ont.get("downloaded", True) or ont.get("update_available"):
+                            verb = ("Updating" if ont.get("downloaded", True)
+                                    else "Downloading")
+                            with st.spinner(verb + " " + acronym + " from "
+                                            "BioPortal... large ontologies can "
+                                            "take a few minutes."):
+                                ok, message = install_ontology(acronym)
+                            if not ok:
+                                # Reset the checkbox (a version bump rebuilds
+                                # every widget) and surface the reason after
+                                # the rerun.
+                                st.session_state.ontology_install_error = message
+                                st.session_state.ontology_widget_version = \
+                                    st.session_state.get("ontology_widget_version", 0) + 1
+                                st.rerun()
+                            # The catalog changed on disk; drop both caches so
+                            # the entry shows up as downloaded from now on.
+                            _load_ontology_catalog.clear()
+                            st.session_state.available_ontologies = []
                         st.session_state.selected_ontologies.append(acronym)
                         st.session_state.ontologies_changed = True
                         st.rerun()

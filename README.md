@@ -73,12 +73,31 @@ Your key stays on your computer. Maptology does not send it anywhere except to
 BioPortal, and it is only used to download and update ontologies — not while you
 are searching or mapping.
 
-### What the first run does, and what it costs
+### How ontologies are downloaded
 
-The first time you start Maptology it downloads every ontology available in OWL
-format from BioPortal and builds a search index for each one. **This takes a
-while and uses a fair amount of disk space.** After that, ontology searches are
-local and need no network connection at all.
+**By default, Maptology uses lazy loading.** The app opens immediately, and an
+ontology is downloaded from BioPortal and indexed the first time you select it
+in the app — a few seconds for most ontologies, a couple of minutes for the
+largest (NCIT, CHEBI, PR and GAZ are around 1 GB each). Most people map against
+five or ten ontologies, so nothing else is fetched. Once an ontology is on your
+machine, searching it is local and needs no network connection.
+
+Ontologies you already have are checked against BioPortal for new versions at
+most once every 30 days; when a newer version exists, it is fetched the next
+time you select that ontology.
+
+**To download everything up front instead**, set an environment variable before
+starting the app:
+
+```
+# Windows PowerShell
+$env:MAPTOLOGY_DOWNLOAD_ALL = "yes"
+# macOS / Linux
+export MAPTOLOGY_DOWNLOAD_ALL=yes
+```
+
+This suits a server installation, where nobody is waiting at the terminal.
+What it costs, measured once from a clean machine:
 
 | | |
 |---|---|
@@ -91,7 +110,7 @@ local and need no network connection at all.
 The two phases overlap — indexing starts on each ontology as soon as its file
 lands — so the run does not cost the sum of those two figures. It costs roughly
 the longer of them, which makes indexing the part that decides how long you
-wait. Every run now writes its spans to `run_log.jsonl` next to the ontology
+wait. Every run writes its spans to `run_log.jsonl` next to the ontology
 files, so the wall clock for your own machine comes from the log rather than
 from adding the phases up.
 
@@ -111,12 +130,13 @@ ontologies rather than their size, because each one carries a fixed start-up
 cost; the handful of very large ones are only a couple of minutes apiece.
 
 Progress is printed in the terminal, and the app opens once processing has
-finished. A few ontologies are published in formats Maptology cannot read; those
+finished. You can stop it at any point; Maptology runs with whatever it has
+already built and fetches the rest lazily. Later starts only fetch what
+changed. A few ontologies are published in formats Maptology cannot read; those
 are recorded and skipped rather than retried on every start.
 
-On later runs Maptology only checks which ontologies have new versions on
-BioPortal and downloads those, which is much quicker. Requests are spaced out to
-stay within BioPortal's published rate limit of 15 requests per second.
+Requests are spaced out to stay within BioPortal's published rate limit of 15
+requests per second.
 
 If you would rather not download everything, you can stop the process and
 Maptology will use whatever it has already built.
