@@ -24,14 +24,19 @@ Usage:
 """
 
 import argparse
+import contextlib
 import gc
+import gzip
 import json
 import os
 import pickle
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
+import zipfile
 
 import ormsgpack
 import pandas as pd
@@ -50,7 +55,22 @@ CACHE_DIR = os.environ.get("MAPTOLOGY_CACHE_DIR") or os.path.join(_REPO_ROOT, "t
 FAILURE_LOG = os.path.join(_REPO_ROOT, "build_failures.log")
 WORKER_STATUS_FILE = os.path.join(CACHE_DIR, "_worker_status.json")
 STREAM_THRESHOLD_MB = 100  # files larger than this prefer streaming XML parsing
-PER_ONTOLOGY_TIMEOUT_SEC = 120  # subprocess hard-kill if a single build exceeds this
+# How long a build may take is set by which parser it falls through to, not by
+# how big it is: measured across the whole corpus the cost ranges from 0.13
+# seconds per megabyte (NCIT, streamed) to 2,118 (VEMO, a file of almost no size
+# that still took 89 seconds). So size alone cannot set the allowance, and the
+# floor has to be generous enough for a small file on the slow path.
+#
+# These are set from the slowest successful builds measured, with roughly three
+# times their margin, because a generous limit costs nothing when a build
+# succeeds - it returns as soon as it is done - and the point of the timeout is
+# to catch a build that has hung rather than one that is merely slow:
+#
+#   VEMO       0.0 MB   89s      HGNC-NR   91 MB   138s
+#   HRA      197.3 MB  215s      NCIT     917 MB   120s
+PER_ONTOLOGY_TIMEOUT_SEC = 240  # floor: no build gets less than this
+MAX_ONTOLOGY_TIMEOUT_SEC = 900  # ceiling: past this it is hung, not slow
+TIMEOUT_SEC_PER_MB = 4.0
 
 CLASS_TAG_OWL = "{http://www.w3.org/2002/07/owl#}Class"
 ABOUT_ATTR = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
@@ -100,6 +120,164 @@ def looks_like_rdf_xml(owl_file):
     head_lower = head.lower()
     # RDF/XML marker: the <rdf:RDF root element appears near the top.
     return b"<rdf:rdf" in head_lower
+
+
+_XML_ROOT_CLOSERS = (b"</rdf:rdf>", b"</rdf>", b"</ontology>", b"</owl:ontology>")
+
+
+def truncation_problem(acronym, owl_file):
+    """Describe how this file is cut short, or None if it looks whole.
+
+    Worth checking before parsing rather than after: a 1 GiB file that stops
+    mid-element costs the whole timeout to discover, and the message that comes
+    back - that no parser could read it - points at the parsers when the fault
+    is in the file. Only XML serialisations are checked, since Turtle and OBO
+    have no closing token to look for.
+    """
+    try:
+        size = os.path.getsize(owl_file)
+        with open(owl_file, "rb") as fh:
+            head = fh.read(4096)
+            fh.seek(max(0, size - 4096))
+            tail = fh.read()
+    except OSError:
+        return None
+
+    stripped = head.lstrip().lower()
+    if not (stripped.startswith(b"<?xml") or stripped.startswith(b"<rdf")
+            or stripped.startswith(b"<!doctype")):
+        return None
+    if any(closer in tail.lower() for closer in _XML_ROOT_CLOSERS):
+        return None
+
+    ending = tail[-60:].decode("utf-8", "replace").strip().replace("\n", " ")
+    return ("file is truncated: %.1f MB of XML with no closing root element, "
+            "ending %r. Delete it and download it again."
+            % (size / 1e6, ending))
+
+
+def timeout_for_size(size_mb):
+    """How long this ontology is allowed to take before we call it hung."""
+    return int(min(MAX_ONTOLOGY_TIMEOUT_SEC,
+                   max(PER_ONTOLOGY_TIMEOUT_SEC, size_mb * TIMEOUT_SEC_PER_MB)))
+
+
+# Suffixes worth trying to parse. Everything else in an archive - Protege project
+# files, READMEs, licences - is packaging rather than ontology.
+ONTOLOGY_SUFFIXES = (".owl", ".rdf", ".ttl", ".obo", ".omn", ".ofn",
+                     ".xml", ".n3", ".nt", ".jsonld")
+
+# How an ontology serialisation starts, for archives whose entries are named
+# without a useful suffix.
+_ONTOLOGY_PREFIXES = (b"<?xml", b"<rdf", b"<!doctype", b"@prefix", b"@base",
+                      b"format-version:", b"prefix(", b"prefix:", b"ontology(")
+
+
+def _looks_like_ontology(head):
+    stripped = head.lstrip().lower()
+    return stripped.startswith(_ONTOLOGY_PREFIXES)
+
+
+def _ontology_entries(zf):
+    """Every member of an archive that is worth handing to a parser.
+
+    Packaging - Protege project files, licences, READMEs - is left out; the rest
+    is kept, because a multi-file archive is one ontology split across files
+    rather than a choice between them.
+    """
+    entries = [i for i in zf.infolist() if not i.is_dir() and i.file_size > 0]
+    named = [i for i in entries
+             if os.path.splitext(i.filename)[1].lower() in ONTOLOGY_SUFFIXES]
+    if not named:
+        # Nothing carries a useful suffix, so look at how each entry starts.
+        for info in entries:
+            try:
+                with zf.open(info) as fh:
+                    if _looks_like_ontology(fh.read(200)):
+                        named.append(info)
+            except Exception:
+                continue
+    if not named:
+        raise RuntimeError(
+            "archive contains no ontology file (entries: %s)"
+            % ", ".join(i.filename for i in entries[:5]))
+    return named
+
+
+def uncompressed_size_mb(owl_file):
+    """Size the parsers will actually face, without unpacking anything.
+
+    An archive's stored size says nothing about the work ahead - BIOMODELS is
+    12.6 MB on disk and 253 MB once opened - and both the timeout and the choice
+    of parser depend on the real figure. ZIP keeps it in the central directory
+    and gzip in the last four bytes, so neither costs a read of the whole file.
+    """
+    try:
+        size = os.path.getsize(owl_file)
+        with open(owl_file, "rb") as fh:
+            magic = fh.read(4)
+        if magic[:4] == b"PK\x03\x04":
+            with zipfile.ZipFile(owl_file) as zf:
+                largest = max((i.file_size for i in zf.infolist()), default=0)
+            return largest / 1e6 if largest else size / 1e6
+        if magic[:2] == b"\x1f\x8b":
+            with open(owl_file, "rb") as fh:
+                fh.seek(-4, os.SEEK_END)
+                # gzip records the size modulo 4 GiB; ontologies here are smaller.
+                return int.from_bytes(fh.read(4), "little") / 1e6
+        return size / 1e6
+    except (OSError, zipfile.BadZipFile, ValueError):
+        try:
+            return os.path.getsize(owl_file) / 1e6
+        except OSError:
+            return 0.0
+
+
+@contextlib.contextmanager
+def readable_sources(acronym, owl_file):
+    """Yield the files the parsers should read, unwrapping any container first.
+
+    BioPortal serves each ontology in whatever container its author uploaded, and
+    the downloader stores the response bytes under a .owl name without looking
+    inside. Eight ontologies are therefore ZIP or GZIP archives that no parser
+    here can read. Unwrapping at parse time rather than at download time also
+    repairs the copies already sitting in existing installations.
+
+    Unwrapped copies live in a temporary directory that is removed on the way
+    out, so a 250 MB archive does not silently become 250 MB of extra cache.
+    """
+    try:
+        with open(owl_file, "rb") as fh:
+            magic = fh.read(4)
+    except OSError:
+        yield [owl_file]
+        return
+
+    if magic[:2] != b"\x1f\x8b" and magic[:4] != b"PK\x03\x04":
+        yield [owl_file]
+        return
+
+    tmpdir = tempfile.mkdtemp(prefix="maptology_unpack_")
+    try:
+        if magic[:2] == b"\x1f\x8b":
+            target = os.path.join(tmpdir, acronym + ".owl")
+            with gzip.open(owl_file, "rb") as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            yield [target]
+        else:
+            out = []
+            with zipfile.ZipFile(owl_file) as zf:
+                for n, info in enumerate(_ontology_entries(zf)):
+                    # Entries can share a basename across subdirectories, so the
+                    # index keeps them from overwriting one another.
+                    base = os.path.basename(info.filename) or (acronym + ".owl")
+                    target = os.path.join(tmpdir, "%03d_%s" % (n, base))
+                    with zf.open(info) as src, open(target, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    out.append(target)
+            yield out
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def extract_terms_streaming(owl_file):
@@ -359,13 +537,36 @@ def build_and_save(acronym, terms):
     )
     tfidf_matrix = vectorizer.fit_transform(documents)
 
+    # Everything is written beside its final name and moved into place only once
+    # all three files are complete. is_cache_built asks whether the three files
+    # exist, and writing them directly made that question unsafe to answer: the
+    # terms file is opened before the data to fill it has been produced, so a
+    # build interrupted at that moment - which the timeout does deliberately -
+    # left an empty file that counted as a finished cache and loaded as nothing.
     folder = os.path.join(CACHE_DIR, acronym)
     os.makedirs(folder, exist_ok=True)
-    sparse.save_npz(os.path.join(folder, acronym + "_tfidf_matrix.npz"), tfidf_matrix)
-    with open(os.path.join(folder, acronym + "_vectorizer.pkl"), "wb") as f:
-        pickle.dump(vectorizer, f)
-    with open(os.path.join(folder, acronym + "_terms.ormsgpack"), "wb") as f:
-        f.write(ormsgpack.packb(terms))
+    finals = [os.path.join(folder, acronym + suffix) for suffix in
+              ("_tfidf_matrix.npz", "_vectorizer.pkl", "_terms.ormsgpack")]
+    temps = [f + ".tmp" for f in finals]
+
+    try:
+        # save_npz appends .npz to a path that lacks it, so it gets a handle.
+        with open(temps[0], "wb") as fh:
+            sparse.save_npz(fh, tfidf_matrix)
+        with open(temps[1], "wb") as fh:
+            pickle.dump(vectorizer, fh)
+        packed = ormsgpack.packb(terms)
+        with open(temps[2], "wb") as fh:
+            fh.write(packed)
+        for tmp, final in zip(temps, finals):
+            os.replace(tmp, final)
+    except BaseException:
+        for tmp in temps:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        raise
 
     return tfidf_matrix.shape
 
@@ -386,6 +587,16 @@ def cleanup_partial_cache(acronym):
 
 
 def build_one(acronym, owl_file, size_mb):
+    """Index one ontology, unwrapping its container first if it has one."""
+    with readable_sources(acronym, owl_file) as sources:
+        for path in sources:
+            problem = truncation_problem(acronym, path)
+            if problem:
+                raise RuntimeError(problem)
+        return _build_from_sources(acronym, sources)
+
+
+def _extract_terms(owl_file, size_mb):
     """Try several extractors in order until one returns a non-empty term list.
 
     Order:
@@ -438,52 +649,138 @@ def build_one(acronym, owl_file, size_mb):
             % (", ".join(label for label, _ in attempts), head,
                type(last_err).__name__ if last_err else "none", last_err))
 
+    return method, terms, dep
+
+
+def _build_from_sources(acronym, sources):
+    """Index one ontology, which may arrive as several files.
+
+    ICPS is twenty-five OWL files in one archive and OCRE is six; in both the
+    ontology is the whole set rather than any one member. Parsing only the
+    largest gave ICPS eleven terms and called it done, which is worse than
+    failing - it claims coverage that is not there. Terms are merged on IRI, so
+    a concept repeated across members is stored once.
+    """
+    merged = {}
+    methods = []
+    dep = 0
+    errors = []
+    for path in sources:
+        size_mb = os.path.getsize(path) / 1e6
+        try:
+            method, terms, d = _extract_terms(path, size_mb)
+        except Exception as e:
+            errors.append("%s: %s" % (os.path.basename(path), e))
+            continue
+        methods.append(method)
+        dep += d
+        for t in terms:
+            merged.setdefault(t["iri"], t)
+
+    if not merged:
+        raise RuntimeError(errors[0] if len(errors) == 1
+                           else "no parser could read any of the %d files in this "
+                                "archive; %s" % (len(sources), " | ".join(errors[:3])))
+
+    terms = list(merged.values())
+    method = methods[0] if len(set(methods)) == 1 else "+".join(sorted(set(methods)))
+    if len(sources) > 1:
+        method = "%s x%d" % (method, len(sources))
+
     shape = build_and_save(acronym, terms)
     n_def = sum(1 for t in terms if t["definition"] != "No definition available")
     n_syn = sum(1 for t in terms if t["synonyms"])
     return method, len(terms), dep, n_def, n_syn, shape
 
 
-def build_one_with_timeout(acronym, owl_file, size_mb, timeout_seconds=PER_ONTOLOGY_TIMEOUT_SEC):
+def _tail_text(path, limit=300):
+    """Last few hundred characters of a worker's stderr, on one line."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - 4096))
+            raw = fh.read()
+    except OSError:
+        return ""
+    text = raw.decode("utf-8", "replace").strip().replace("\n", " | ")
+    return text[-limit:]
+
+
+def _discard(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def build_one_with_timeout(acronym, owl_file, size_mb, timeout_seconds=None):
     """Run build_one in a child subprocess with a hard timeout.
 
     Some ontologies cause owlready2 to enter pathological cyclic-resolution
     loops (e.g. MGBD spamming "ignoring cyclic type of" warnings for hours).
     Running each build in its own process means we can kill it cleanly.
+
+    The allowance is derived from the size the parsers will meet rather than the
+    size on disk, so a compressed ontology is not cut off part way through for
+    having looked small.
     """
-    if os.path.exists(WORKER_STATUS_FILE):
+    if timeout_seconds is None:
+        timeout_seconds = timeout_for_size(uncompressed_size_mb(owl_file))
+    # One status file per ontology. A single shared path was fine while builds
+    # ran one at a time, but it makes concurrent builds read each other's
+    # results, and building several at once is the main way to use more than one
+    # of the machine's cores.
+    status_file = os.path.join(CACHE_DIR, "_worker_status_%s.json" % acronym)
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    if os.path.exists(status_file):
         try:
-            os.remove(WORKER_STATUS_FILE)
+            os.remove(status_file)
         except OSError:
             pass
 
     cmd = [sys.executable, "-u", __file__, "--worker-build",
-           acronym, owl_file, str(size_mb)]
+           acronym, owl_file, str(size_mb), status_file]
+    # The child's output goes to a file rather than a pipe. Capturing it through
+    # a pipe means that after the timeout fires we still have to drain whatever
+    # the child buffered before it can be reaped, and a build that spins inside
+    # owlready2 emits warnings without limit: CHEBI took 1,274 seconds to stop
+    # under a 600 second timeout, all of it draining. Writing to a file makes the
+    # kill immediate and still leaves the tail for the error message.
+    err_file = os.path.join(CACHE_DIR, "_worker_stderr_%s.log" % acronym)
+    returncode = None
     try:
-        proc = subprocess.run(
-            cmd,
-            timeout=timeout_seconds,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        with open(err_file, "wb") as errfh:
+            proc = subprocess.run(
+                cmd,
+                timeout=timeout_seconds,
+                stdout=subprocess.DEVNULL,
+                stderr=errfh,
+            )
+        returncode = proc.returncode
     except subprocess.TimeoutExpired:
         cleanup_partial_cache(acronym)
+        _discard(err_file)
         raise RuntimeError("build timed out after " + str(timeout_seconds) + "s")
 
-    if not os.path.exists(WORKER_STATUS_FILE):
-        cleanup_partial_cache(acronym)
-        tail = (proc.stderr or "")[-300:].strip().replace("\n", " | ")
-        raise RuntimeError("worker died (exit " + str(proc.returncode) +
-                           ") without status; stderr: " + tail)
+    stderr_tail = _tail_text(err_file)
+    _discard(err_file)
 
-    with open(WORKER_STATUS_FILE, "r", encoding="utf-8") as fh:
+    if not os.path.exists(status_file):
+        cleanup_partial_cache(acronym)
+        raise RuntimeError("worker died (exit " + str(returncode) +
+                           ") without status; stderr: " + stderr_tail)
+
+    with open(status_file, "r", encoding="utf-8") as fh:
         status = json.load(fh)
 
-    if proc.returncode != 0 or "error" in status:
+    try:
+        os.remove(status_file)
+    except OSError:
+        pass
+
+    if returncode != 0 or "error" in status:
         cleanup_partial_cache(acronym)
-        raise RuntimeError(status.get("error", "worker failed (exit " + str(proc.returncode) + ")"))
+        raise RuntimeError(status.get("error", "worker failed (exit " + str(returncode) + ")"))
 
     return (status["method"], status["n"], status["dep"],
             status["n_def"], status["n_syn"], tuple(status["shape"]))
@@ -494,16 +791,17 @@ def worker_main():
     acronym = sys.argv[2]
     owl_file = sys.argv[3]
     size_mb = float(sys.argv[4])
+    status_file = sys.argv[5] if len(sys.argv) > 5 else WORKER_STATUS_FILE
     try:
         method, n, dep, n_def, n_syn, shape = build_one(acronym, owl_file, size_mb)
-        with open(WORKER_STATUS_FILE, "w", encoding="utf-8") as fh:
+        with open(status_file, "w", encoding="utf-8") as fh:
             json.dump({"method": method, "n": n, "dep": dep,
                        "n_def": n_def, "n_syn": n_syn,
                        "shape": list(shape)}, fh)
         sys.exit(0)
     except Exception as e:
         cleanup_partial_cache(acronym)
-        with open(WORKER_STATUS_FILE, "w", encoding="utf-8") as fh:
+        with open(status_file, "w", encoding="utf-8") as fh:
             json.dump({"error": type(e).__name__ + ": " + str(e)}, fh)
         sys.exit(1)
 
