@@ -382,6 +382,44 @@ def get_catalogue(api_key, max_age_days=CATALOGUE_MAX_AGE_DAYS):
     return catalogue
 
 
+def updates_available(catalogue):
+    """Downloaded ontologies whose BioPortal submission has moved on.
+
+    Same comparison the selection list uses for its "update available" label,
+    so the startup summary and the UI can never disagree about what needs
+    updating.
+    """
+    local = versions.load_local_versions()
+    out = []
+    for ont in catalogue:
+        acronym = ont["acronym"]
+        if not builder.is_cache_built(acronym):
+            continue
+        have = (local.get(acronym) or {}).get("submissionId")
+        if have != ont.get("submissionId"):
+            out.append(acronym)
+    return sorted(out)
+
+
+def auto_update_if_due(api_key):
+    """Run the full update when the saved catalogue has gone stale.
+
+    This is what keeps a server current: a machine that runs for months never
+    passes through the startup check again, so something has to ask the same
+    30-day question while the app is up. Returns (ran, done, failed); ran is
+    False when the catalogue is still fresh and nothing was touched.
+
+    run() saves the catalogue it fetches, which is what resets the 30-day
+    clock - no separate timestamp to keep in sync.
+    """
+    if load_saved_catalogue(CATALOGUE_MAX_AGE_DAYS) is not None:
+        return False, 0, 0
+    print("\n30 days since the last BioPortal check; fetching what changed...",
+          flush=True)
+    done, failed = run(api_key)
+    return True, done, failed
+
+
 def setup_one(ont, api_key):
     """Download and index a single ontology, on demand.
 

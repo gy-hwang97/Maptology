@@ -83,8 +83,8 @@ five or ten ontologies, so nothing else is fetched. Once an ontology is on your
 machine, searching it is local and needs no network connection.
 
 Ontologies you already have are checked against BioPortal for new versions at
-most once every 30 days; when a newer version exists, it is fetched the next
-time you select that ontology.
+most once every 30 days; the terminal lists any that have newer versions when
+the app starts, and each is fetched the next time you select it.
 
 **To download everything up front instead**, set an environment variable before
 starting the app:
@@ -97,7 +97,9 @@ export MAPTOLOGY_DOWNLOAD_ALL=yes
 ```
 
 This suits a server installation, where nobody is waiting at the terminal.
-What it costs, measured once from a clean machine:
+While the app stays running, BioPortal is re-checked every 30 days and any
+changes are fetched automatically, so a long-running server needs no hand
+maintenance. What it costs, measured once from a clean machine:
 
 | | |
 |---|---|

@@ -23,11 +23,19 @@ Streamlit reruns the whole script on every click.
 
 import os
 import sys
+import threading
+import time
 
 import streamlit as st
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _BUILD_DIR = os.path.join(_REPO_ROOT, "build")
+
+# How often the download-all auto-updater wakes to ask "has it been 30 days?".
+# The question is answered by the saved catalogue's age, so waking is nearly
+# free; every six hours just keeps the worst-case lag behind the 30-day mark
+# small.
+_AUTO_UPDATE_POLL_SECONDS = 6 * 3600
 
 
 def _cache_count():
@@ -87,13 +95,64 @@ def ensure_ontologies():
     return _prepare_lazy()
 
 
+def _drop_stale_indexes():
+    """Forget in-memory copies of indexes after a background update.
+
+    The app keeps loaded TF-IDF matrices in module memory and the merged
+    selection list in a Streamlit cache; both would keep serving the old
+    version of an ontology whose files were just replaced on disk. Cheap to
+    drop wholesale - each ontology reloads lazily on its next search.
+    """
+    try:
+        import tfidf_search
+        tfidf_search._loaded_ontologies.clear()
+    except Exception:
+        pass
+    try:
+        import ontology
+        ontology._load_ontology_catalog.clear()
+    except Exception:
+        pass
+
+
+def _start_auto_updater(setup, api_key):
+    """Keep a long-running server current without anyone touching it.
+
+    The startup check only ever runs at startup, and a server is started once
+    and then left alone for months - so the same 30-day question has to be
+    asked while the app is up. A daemon thread wakes a few times a day, and
+    when the saved catalogue has gone stale it fetches whatever changed.
+    Daemon, so stopping the app never waits on it; downloads already land
+    under temp names, so an interrupted update cannot leave a broken file.
+    """
+    def loop():
+        while True:
+            time.sleep(_AUTO_UPDATE_POLL_SECONDS)
+            try:
+                ran, done, failed = setup.auto_update_if_due(api_key)
+                if ran and done:
+                    _drop_stale_indexes()
+            except Exception as e:
+                # A failed check must not kill the updater; the next wake
+                # simply tries again.
+                print("Automatic ontology update failed (%s: %s); will retry."
+                      % (type(e).__name__, e), flush=True)
+
+    thread = threading.Thread(target=loop, daemon=True,
+                              name="maptology-auto-update")
+    thread.start()
+    return thread
+
+
 def _download_everything():
     """The server path: fetch and index the whole corpus before opening."""
     api_key = _api_key()
     print("\n" + "=" * 70)
     print("MAPTOLOGY_DOWNLOAD_ALL is set: downloading and indexing every")
     print("ontology before the app opens. This takes a few hours the first")
-    print("time; later starts only fetch what changed on BioPortal.")
+    print("time; later starts only fetch what changed on BioPortal. While")
+    print("the app stays running, BioPortal is re-checked every 30 days and")
+    print("changes are fetched automatically.")
     print("=" * 70, flush=True)
 
     if not api_key:
@@ -105,6 +164,10 @@ def _download_everything():
     setup = _setup_module()
     if setup is None:
         return "updater unavailable; using %d cached ontologies" % _cache_count()
+
+    # Started before the first run rather than after: if that run fails on a
+    # network hiccup, the updater is what heals the installation later.
+    _start_auto_updater(setup, api_key)
 
     try:
         done, failed = setup.run(api_key)
@@ -159,14 +222,31 @@ def _prepare_lazy():
     try:
         catalogue = setup.get_catalogue(api_key)
         print("BioPortal offers %d ontologies; they appear in the selection "
-              "list below.\n" % len(catalogue), flush=True)
+              "list below." % len(catalogue), flush=True)
     except Exception as e:
         print("Could not reach BioPortal (%s: %s); the selection list shows "
               "only what is already downloaded.\n" % (type(e).__name__, e),
               flush=True)
         return "lazy loading; catalogue unavailable; %d ontologies available" % have
 
-    return "lazy loading; %d downloaded of %d available" % (have, len(catalogue))
+    # Surface pending updates here as well as in the list: the "(update
+    # available)" label only helps someone who happens to scroll past it.
+    try:
+        pending = setup.updates_available(catalogue)
+    except Exception:
+        pending = []
+    if pending:
+        shown = ", ".join(pending[:10])
+        if len(pending) > 10:
+            shown += ", and %d more" % (len(pending) - 10)
+        print("%d of your downloaded ontologies have newer versions on "
+              "BioPortal:" % len(pending))
+        print("   " + shown)
+        print("Selecting one in the app downloads its new version.", flush=True)
+    print("", flush=True)
+
+    return "lazy loading; %d downloaded of %d available, %d with updates" % (
+        have, len(catalogue), len(pending))
 
 
 # ---------------------------------------------------------------------------

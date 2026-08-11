@@ -471,3 +471,66 @@ def test_setup_one_failure_records_nothing_current(monkeypatch, tmp_path):
     assert "AAA" not in store
     # The unreadable submission is remembered so it is not retried forever.
     assert setup.load_failures().get("AAA") == 5
+
+
+# ---------------------------------------------------------------------------
+# What keeps a long-running server current, and the startup update summary.
+# ---------------------------------------------------------------------------
+
+def test_auto_update_does_nothing_while_the_catalogue_is_fresh(monkeypatch, tmp_path):
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    setup.save_catalogue(_catalogue())
+
+    def must_not_run(api_key, only=None, limit=0, check_only=False):
+        raise AssertionError("updated even though the catalogue was fresh")
+
+    monkeypatch.setattr(setup, "run", must_not_run)
+    assert setup.auto_update_if_due("key") == (False, 0, 0)
+
+
+def test_auto_update_runs_once_the_catalogue_goes_stale(monkeypatch, tmp_path):
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    setup.save_catalogue(_catalogue())
+    monkeypatch.setattr(setup.time, "time",
+                        lambda real=setup.time.time: real() + 31 * 86400)
+    calls = []
+    monkeypatch.setattr(setup, "run",
+                        lambda api_key, **kw: (calls.append(api_key), (3, 1))[1])
+
+    ran, done, failed = setup.auto_update_if_due("key")
+
+    assert (ran, done, failed) == (True, 3, 1)
+    assert calls == ["key"]
+
+
+def test_auto_update_never_ran_before_counts_as_due(monkeypatch, tmp_path):
+    # A server whose catalogue file was deleted (or that never fetched one)
+    # must update rather than wait forever for a freshness it cannot have.
+    _patch_catalogue_file(monkeypatch, tmp_path)
+    monkeypatch.setattr(setup, "run", lambda api_key, **kw: (2, 0))
+    assert setup.auto_update_if_due("key") == (True, 2, 0)
+
+
+def test_updates_available_lists_only_built_and_outdated(monkeypatch, tmp_path):
+    _patch(monkeypatch, tmp_path, built={"AAA"}, owl_present=["AAA"])
+    # AAA is built at submission 4, catalogue offers 5 -> update.
+    # BBB is not built at all -> not an update, just not downloaded.
+    monkeypatch.setattr(setup.versions, "load_local_versions",
+                        lambda: {"AAA": {"submissionId": 4}})
+    assert setup.updates_available(_catalogue()) == ["AAA"]
+
+
+def test_updates_available_is_quiet_when_everything_is_current(monkeypatch, tmp_path):
+    _patch(monkeypatch, tmp_path, built={"AAA", "BBB"}, owl_present=["AAA", "BBB"])
+    monkeypatch.setattr(setup.versions, "load_local_versions",
+                        lambda: {"AAA": {"submissionId": 5},
+                                 "BBB": {"submissionId": 9}})
+    assert setup.updates_available(_catalogue()) == []
+
+
+def test_updates_available_treats_an_unrecorded_build_as_outdated(monkeypatch, tmp_path):
+    # No recorded submission means the build cannot be shown to be current;
+    # the selection list marks these too, and the two must agree.
+    _patch(monkeypatch, tmp_path, built={"AAA"}, owl_present=["AAA"])
+    monkeypatch.setattr(setup.versions, "load_local_versions", lambda: {})
+    assert setup.updates_available(_catalogue()) == ["AAA"]
