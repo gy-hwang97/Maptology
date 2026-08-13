@@ -3,11 +3,12 @@ REM Stop, rebuild, and start the Maptology Streamlit container.
 
 setlocal EnableExtensions
 
-set "IMAGE_NAME=maptology"
-set "CONTAINER_NAME=maptology"
 if not defined MAPTOLOGY_PORT set "MAPTOLOGY_PORT=8501"
 if not defined BIOPORTAL_APIKEY set "BIOPORTAL_APIKEY=<YOUR_API_KEY>"
 if not defined MAPTOLOGY_DOWNLOAD_ALL set "MAPTOLOGY_DOWNLOAD_ALL=yes"
+
+set "IMAGE_NAME=maptology"
+set "CONTAINER_NAME=maptology"
 
 if "%BIOPORTAL_APIKEY%"=="<YOUR_API_KEY>" (
   echo BIOPORTAL_APIKEY is still set to the placeholder ^<YOUR_API_KEY^>.

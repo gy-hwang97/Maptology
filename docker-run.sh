@@ -2,11 +2,12 @@
 # Stop, rebuild, and start the Maptology Streamlit container.
 set -euo pipefail
 
-IMAGE_NAME="maptology"
-CONTAINER_NAME="maptology"
 HOST_PORT="${MAPTOLOGY_PORT:-8501}"
 BIOPORTAL_APIKEY="${BIOPORTAL_APIKEY:-<YOUR_API_KEY>}"
 MAPTOLOGY_DOWNLOAD_ALL="${MAPTOLOGY_DOWNLOAD_ALL:-yes}"
+
+IMAGE_NAME="maptology"
+CONTAINER_NAME="maptology"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ "$BIOPORTAL_APIKEY" == "<YOUR_API_KEY>" ]]; then
