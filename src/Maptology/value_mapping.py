@@ -107,8 +107,10 @@ def render_value_mapping_section():
         show_value_mapping = False
 
     if show_value_mapping:
-        unique_values = df[selected_col].dropna().unique()
-        unique_values.sort()
+        # sorted() rather than .sort(): newer pandas backs string columns with
+        # Arrow arrays, and their unique() result has no in-place sort. key=str
+        # keeps mixed types comparable, matching how utils.py sorts these.
+        unique_values = sorted(df[selected_col].dropna().unique(), key=str)
 
         if len(unique_values) > 0:
             st.markdown('<div class="sub-heading">Select a unique value from column \'' + selected_col + '\' to map to an ontology term</div>', unsafe_allow_html=True)
@@ -117,7 +119,7 @@ def render_value_mapping_section():
             # documents each one, so a value the dropdown never offers can never
             # be mapped. (This list used to be truncated to the first 5, which
             # silently made values 6+ impossible to map at all.)
-            all_values = [str(v) for v in unique_values.tolist()]
+            all_values = [str(v) for v in unique_values]
 
             # A long dropdown is hard to work through, so offer a filter once the
             # list is big enough to need one. Short columns render exactly as before.
