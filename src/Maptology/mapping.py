@@ -207,8 +207,11 @@ def on_column_select():
         if st.session_state.uploaded_df is not None and not st.session_state.auto_searched:
             dtype_name = str(st.session_state.uploaded_df[selected_column].dtype)
             if dtype_name == 'object' or dtype_name.startswith('string') or dtype_name == 'category':
-                unique_values = st.session_state.uploaded_df[selected_column].dropna().unique()
-                unique_values.sort()
+                # sorted() rather than .sort(): Arrow-backed string columns in
+                # newer pandas return arrays without an in-place sort.
+                unique_values = sorted(
+                    st.session_state.uploaded_df[selected_column].dropna().unique(),
+                    key=str)
                 if len(unique_values) > 0:
                     default_value = str(unique_values[0])
                     st.session_state.selected_unique_value = default_value
