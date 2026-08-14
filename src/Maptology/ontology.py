@@ -346,9 +346,14 @@ def render_ontology_selection(available_ontologies):
 
     selected = st.session_state.selected_ontologies
 
-    # The filter sits directly above the list it filters.
+    # The filter sits directly above the list it filters. Its widget key is
+    # versioned so Add can hand back an empty box - the added ontology was
+    # usually the query's only match, and a stale query would greet the user
+    # with an empty list right when they look for the next one.
+    filter_seq = st.session_state.get("ontology_filter_seq", 0)
     filter_query = st.text_input("Filter ontologies",
-                                 placeholder="Type to filter available ontologies...")
+                                 placeholder="Type to filter available ontologies...",
+                                 key="ontology_filter_" + str(filter_seq))
 
     header_col, button_col = st.columns([3, 1], vertical_alignment="bottom")
     with header_col:
@@ -426,6 +431,7 @@ def render_ontology_selection(available_ontologies):
                             st.rerun()
                         _load_ontology_catalog.clear()
                         st.session_state.available_ontologies = []
+                    st.session_state.ontology_filter_seq = filter_seq + 1
                     st.session_state.selected_ontologies.append(acronym)
                     st.session_state.ontologies_changed = True
                     st.rerun()
