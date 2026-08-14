@@ -375,7 +375,32 @@ def render_ontology_selection(available_ontologies):
 
     if not available:
         if filter_query:
-            st.caption("No available ontology matches '" + filter_query + "'.")
+            # An empty result usually has a reason the user can act on: the
+            # match is already selected, or it exists but is not downloaded.
+            # Say which, rather than a bare "no match".
+            q = filter_query.lower()
+            already = [o["acronym"] for o in available_ontologies
+                       if o["acronym"] in selected
+                       and (q in o["acronym"].lower() or q in o["name"].lower())]
+            downloadable = [o["acronym"] for o in available_ontologies
+                            if not o.get("downloaded", False)
+                            and o["acronym"] not in selected
+                            and (q in o["acronym"].lower() or q in o["name"].lower())]
+            if already:
+                st.caption(", ".join(already)
+                           + (" is" if len(already) == 1 else " are")
+                           + " already selected - see Selected ontologies below.")
+            if downloadable:
+                shown = ", ".join(downloadable[:5])
+                if len(downloadable) > 5:
+                    shown += " and %d more" % (len(downloadable) - 5)
+                st.caption(shown
+                           + (" is" if len(downloadable) == 1 else " are")
+                           + " not on this machine yet - use \"Download "
+                             "ontologies\" to fetch "
+                           + ("it." if len(downloadable) == 1 else "them."))
+            if not already and not downloadable:
+                st.caption("No available ontology matches '" + filter_query + "'.")
         else:
             st.caption("Nothing downloaded yet - use \"Download ontologies\" "
                        "to fetch some from BioPortal.")
