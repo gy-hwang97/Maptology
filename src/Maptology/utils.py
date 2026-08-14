@@ -107,13 +107,6 @@ def initialize_session():
     if 'mapping_version' not in st.session_state:
         st.session_state.mapping_version = 0
 
-    # 온톨로지 체크박스 위젯 버전 / Bumped on every PROGRAMMATIC change to the
-    # ontology selection (import auto-select, Select None, file upload/remove) so
-    # the ontology checkboxes re-render from selected_ontologies instead of stale
-    # widget state. NOT bumped on a manual checkbox toggle.
-    if 'ontology_widget_version' not in st.session_state:
-        st.session_state.ontology_widget_version = 0
-
     # 가져온 매핑 파일의 내용 해시 / Content hash of the last-imported mapping file
     # (compared instead of the filename, so a different file with the same name
     # is still re-imported).

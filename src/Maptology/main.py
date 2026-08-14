@@ -78,7 +78,6 @@ if uploaded_file:
         st.session_state.mapping_uploader_seq = st.session_state.get('mapping_uploader_seq', 0) + 1
         # Force checkbox widgets to re-render fresh (mappings were cleared)
         st.session_state.mapping_version = st.session_state.get('mapping_version', 0) + 1
-        st.session_state.ontology_widget_version = st.session_state.get('ontology_widget_version', 0) + 1
 
     try:
         # Read file based on format
@@ -194,7 +193,6 @@ else:
         st.session_state.mapping_uploader_seq = st.session_state.get('mapping_uploader_seq', 0) + 1
         # Force checkbox widgets to re-render fresh (mappings were cleared)
         st.session_state.mapping_version = st.session_state.get('mapping_version', 0) + 1
-        st.session_state.ontology_widget_version = st.session_state.get('ontology_widget_version', 0) + 1
         st.rerun()
 
 st.write("---")

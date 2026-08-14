@@ -440,10 +440,7 @@ def _auto_select_ontologies(kept_cols, kept_vals):
       - only ontologies that exist in the local catalog are selected
       - existing selections are kept (union), capped at 10
       - returns (unknown, overflow): abbreviations that could NOT be selected
-        because they are not in the catalog / would exceed the 10 cap.
-
-    Bumps ontology_widget_version so the ontology checkboxes re-render checked
-    (otherwise Streamlit keeps their stale unchecked widget state)."""
+        because they are not in the catalog / would exceed the 10 cap."""
     available = st.session_state.get("available_ontologies", []) or []
     canon = {}
     for o in available:
@@ -474,9 +471,6 @@ def _auto_select_ontologies(kept_cols, kept_vals):
 
     if changed:
         st.session_state.ontologies_changed = True
-        st.session_state.ontology_widget_version = (
-            st.session_state.get("ontology_widget_version", 0) + 1
-        )
     return unknown, overflow
 
 

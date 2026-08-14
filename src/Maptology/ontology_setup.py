@@ -7,10 +7,11 @@ Two modes, chosen by one environment variable:
       hours of work, meant for a server install where nobody is watching.
 
   unset (the default)
-      Lazy loading. The app opens immediately; an ontology is downloaded and
-      indexed the first time someone selects it, which takes seconds for most
-      and a couple of minutes for the largest. Most people use five or ten
-      ontologies, so downloading a thousand up front helps nobody.
+      Lazy loading. The app opens immediately; ontologies are downloaded and
+      indexed on demand through the app's "Download ontologies" dialog, which
+      takes seconds for most and a couple of minutes for the largest. Most
+      people use five or ten ontologies, so downloading a thousand up front
+      helps nobody.
 
 Either way, BioPortal is asked what exists at most once every 30 days; between
 checks the saved catalogue answers instead. An environment variable rather
@@ -195,9 +196,10 @@ def _prepare_lazy():
     """
     have = _cache_count()
     print("\n" + "=" * 70)
-    print("Maptology downloads an ontology from BioPortal the first time you")
-    print("select it in the app - a few seconds for most, a couple of minutes")
-    print("for the largest. %d are already on this machine." % have)
+    print("Maptology fetches ontologies from BioPortal on demand: use the")
+    print("\"Download ontologies\" button in the app - a few seconds for most,")
+    print("a couple of minutes for the largest. %d are already on this "
+          "machine." % have)
     print("")
     print("To download and index everything up front instead (~1,000")
     print("ontologies, 15 GB, roughly 2-3 hours), set an environment variable")
@@ -221,8 +223,9 @@ def _prepare_lazy():
 
     try:
         catalogue = setup.get_catalogue(api_key)
-        print("BioPortal offers %d ontologies; they appear in the selection "
-              "list below." % len(catalogue), flush=True)
+        print("BioPortal offers %d ontologies; the app's \"Download "
+              "ontologies\" button fetches any of them." % len(catalogue),
+              flush=True)
     except Exception as e:
         print("Could not reach BioPortal (%s: %s); the selection list shows "
               "only what is already downloaded.\n" % (type(e).__name__, e),
@@ -242,7 +245,8 @@ def _prepare_lazy():
         print("%d of your downloaded ontologies have newer versions on "
               "BioPortal:" % len(pending))
         print("   " + shown)
-        print("Selecting one in the app downloads its new version.", flush=True)
+        print("Adding one to your selection in the app downloads its new "
+              "version.", flush=True)
     print("", flush=True)
 
     return "lazy loading; %d downloaded of %d available, %d with updates" % (
@@ -280,8 +284,8 @@ def recorded_submissions():
 def install_ontology(acronym):
     """Download and index one ontology right now. Returns (ok, message).
 
-    Called from the selection list when someone picks an ontology that is not
-    on disk yet, or whose BioPortal submission has moved on.
+    Called from the download dialog, and from Add when the ontology's
+    BioPortal submission has moved on since it was built.
     """
     api_key = _api_key()
     if not api_key:

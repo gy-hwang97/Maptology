@@ -82,16 +82,18 @@ are searching or mapping.
 
 ### How ontologies are downloaded
 
-**By default, Maptology uses lazy loading.** The app opens immediately, and an
-ontology is downloaded from BioPortal and indexed the first time you select it
-in the app — a few seconds for most ontologies, a couple of minutes for the
-largest (NCIT, CHEBI, PR and GAZ are around 1 GB each). Most people map against
-five or ten ontologies, so nothing else is fetched. Once an ontology is on your
-machine, searching it is local and needs no network connection.
+**By default, Maptology uses lazy loading.** The app opens immediately, and
+you fetch ontologies as you need them: the **Download ontologies** button in
+the app lists everything BioPortal offers, and downloading one takes a few
+seconds for most ontologies, a couple of minutes for the largest (NCIT, CHEBI,
+PR and GAZ are around 1 GB each). Most people map against five or ten
+ontologies, so nothing else is fetched. Once an ontology is on your machine,
+searching it is local and needs no network connection.
 
 Ontologies you already have are checked against BioPortal for new versions at
 most once every 30 days; the terminal lists any that have newer versions when
-the app starts, and each is fetched the next time you select it.
+the app starts, and each is fetched the next time you add it to your
+selection.
 
 **To download everything up front instead**, set an environment variable before
 starting the app:

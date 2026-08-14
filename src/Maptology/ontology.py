@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 from tfidf_search import get_ontology_list_from_tsv, search_local
-from ontology_setup import catalogue_entries, recorded_submissions, install_ontology
+from ontology_setup import (catalogue_entries, recorded_submissions,
+                            install_ontology,
+                            _download_all_requested as download_all_requested)
 
 
 # Load the ontology catalog once per server process.
@@ -280,35 +282,61 @@ def search_bioportal_manual_column(search_term):
         return False
 
 
-# Ontology deselection function (for Select None button)
-def select_none_ontologies():
-    st.session_state.selected_ontologies = []
-    st.session_state.ontologies_changed = True
-    # Programmatic change -> refresh the ontology checkboxes so they don't keep
-    # their stale (checked) widget state.
-    st.session_state.ontology_widget_version = st.session_state.get("ontology_widget_version", 0) + 1
-    st.rerun()
+MAX_SELECTED_ONTOLOGIES = 10
 
 
-# Render ontology selection section (UI - mostly unchanged)
+@st.dialog("Download ontologies", width="large")
+def _download_ontologies_dialog():
+    """Fetch ontologies from BioPortal, one click each.
+
+    Lists everything the saved catalogue offers that is not on this machine
+    yet. Downloading lives here, in its own dialog, so the main page only ever
+    deals with ontologies that are actually usable.
+    """
+    st.caption("These ontologies are on BioPortal but not on this machine yet. "
+               "Most download in seconds; the largest take a few minutes. "
+               "Downloaded ontologies appear under Available ontologies.")
+
+    query = st.text_input("Search downloadable ontologies",
+                          placeholder="Type to filter...",
+                          key="download_dialog_filter")
+    candidates = [o for o in get_available_ontologies()
+                  if not o.get("downloaded", False)]
+    if query:
+        q = query.lower()
+        candidates = [o for o in candidates
+                      if q in o["acronym"].lower() or q in o["name"].lower()]
+
+    if not candidates:
+        st.info("Nothing matches, or everything is already downloaded.")
+    else:
+        with st.container(height=380):
+            for ont in candidates:
+                acronym = ont["acronym"]
+                name_col, btn_col = st.columns([5, 1], vertical_alignment="center")
+                name_col.write(acronym + " - " + ont["name"])
+                if btn_col.button("Download", key="download_" + acronym):
+                    with st.spinner("Downloading " + acronym + " from BioPortal..."):
+                        ok, message = install_ontology(acronym)
+                    if ok:
+                        # The catalog on disk changed; drop the caches so this
+                        # entry moves to Available, then redraw only the dialog
+                        # so several ontologies can be fetched in one visit.
+                        _load_ontology_catalog.clear()
+                        st.session_state.available_ontologies = []
+                        st.rerun(scope="fragment")
+                    else:
+                        st.error(message)
+
+    if st.button("Done", key="download_dialog_done"):
+        st.rerun()  # full rerun closes the dialog and refreshes the lists
+
+
+# Render ontology selection: a filter box over the Available (downloaded)
+# list with an Add button per row, the Selected list underneath with a Remove
+# button per row, and a dialog for fetching more from BioPortal.
 def render_ontology_selection(available_ontologies):
     st.markdown('<div class="section-header section-purple">Select Ontologies</div>', unsafe_allow_html=True)
-
-    # Select None button and Selected ontologies on same row
-    btn_col, info_col = st.columns([1, 4])
-
-    with btn_col:
-        if st.button("Select None", key="btn_select_none"):
-            select_none_ontologies()
-
-    with info_col:
-        current_count = len(st.session_state.selected_ontologies)
-        max_count = 10
-        if st.session_state.selected_ontologies:
-            selected_text = ", ".join(st.session_state.selected_ontologies)
-            st.markdown("**Selected ontologies (" + str(current_count) + "/" + str(max_count) + "):** " + selected_text)
-        else:
-            st.warning("Please select at least one ontology to proceed.")
 
     # A download attempted on the previous rerun may have failed; the message
     # has to survive that rerun, so it travels through session state.
@@ -316,98 +344,81 @@ def render_ontology_selection(available_ontologies):
     if install_error:
         st.error(install_error)
 
-    st.caption("Ontologies not yet on this machine are downloaded from "
-               "BioPortal the first time you select them - a few seconds for "
-               "most, a couple of minutes for the largest.")
+    selected = st.session_state.selected_ontologies
 
-    # Search filtering
-    filter_query = st.text_input("Filter ontologies", placeholder="Type to filter...")
+    # The filter sits directly above the list it filters.
+    filter_query = st.text_input("Filter ontologies",
+                                 placeholder="Type to filter available ontologies...")
 
-    # Filtered ontology list
-    filtered_ontologies = available_ontologies
+    header_col, button_col = st.columns([3, 1], vertical_alignment="bottom")
+    with header_col:
+        st.markdown('<div class="sub-heading">Available ontologies</div>',
+                    unsafe_allow_html=True)
+    # On a download-everything install the whole catalogue is already local
+    # (or on its way), so there is nothing for the button to offer.
+    if not download_all_requested():
+        with button_col:
+            if st.button("Download ontologies", key="open_download_dialog"):
+                _download_ontologies_dialog()
+
+    available = [o for o in available_ontologies
+                 if o.get("downloaded", False) and o["acronym"] not in selected]
     if filter_query:
-        filtered_ontologies = []
-        for ont in available_ontologies:
-            acronym_match = filter_query.lower() in ont["acronym"].lower()
-            name_match = filter_query.lower() in ont["name"].lower()
-            if acronym_match or name_match:
-                filtered_ontologies.append(ont)
+        q = filter_query.lower()
+        available = [o for o in available
+                     if q in o["acronym"].lower() or q in o["name"].lower()]
 
-    # Create expandable container
-    with st.expander("Ontology List", expanded=True):
-        # Create scrollable area
-        with st.container(height=400):
-            # Create checkboxes
-            for idx in range(len(filtered_ontologies)):
-                ont = filtered_ontologies[idx]
+    at_limit = len(selected) >= MAX_SELECTED_ONTOLOGIES
+    if at_limit:
+        st.warning("Maximum of " + str(MAX_SELECTED_ONTOLOGIES) + " ontologies "
+                   "selected. Remove one to add another.")
+
+    if not available:
+        if filter_query:
+            st.caption("No available ontology matches '" + filter_query + "'.")
+        else:
+            st.caption("Nothing downloaded yet - use \"Download ontologies\" "
+                       "to fetch some from BioPortal.")
+    else:
+        with st.container(height=350):
+            for ont in available:
                 acronym = ont["acronym"]
-                name = ont["name"]
-                tooltip = ont.get("description", "")
-
-                # Check checkbox state
-                is_checked = acronym in st.session_state.selected_ontologies
-
-                # Calculate currently selected count
-                current_count = len(st.session_state.selected_ontologies)
-                max_count = 10
-
-                # Check maximum selection limit
-                is_disabled = (current_count >= max_count and not is_checked)
-
-                # Say up front which selections will cost a download, so the
-                # wait that follows is never a surprise.
-                label = acronym + " - " + name
-                if not ont.get("downloaded", True):
-                    label += "  (not downloaded yet)"
-                elif ont.get("update_available"):
+                label = acronym + " - " + ont["name"]
+                if ont.get("update_available"):
                     label += "  (update available)"
-
-                checkbox = st.checkbox(
-                    label,
-                    value=is_checked,
-                    key="ont_" + acronym + "_" + str(st.session_state.get("ontology_widget_version", 0)),
-                    help=tooltip,
-                    disabled=is_disabled
-                )
-
-                # Update checkbox state
-                if checkbox and acronym not in st.session_state.selected_ontologies:
-                    if len(st.session_state.selected_ontologies) < max_count:
-                        # Lazy loading: selecting an ontology is what fetches
-                        # it. Also refreshes one whose BioPortal submission has
-                        # moved on since it was built.
-                        if not ont.get("downloaded", True) or ont.get("update_available"):
-                            verb = ("Updating" if ont.get("downloaded", True)
-                                    else "Downloading")
-                            with st.spinner(verb + " " + acronym + " from "
-                                            "BioPortal... large ontologies can "
-                                            "take a few minutes."):
-                                ok, message = install_ontology(acronym)
-                            if not ok:
-                                # Reset the checkbox (a version bump rebuilds
-                                # every widget) and surface the reason after
-                                # the rerun.
-                                st.session_state.ontology_install_error = message
-                                st.session_state.ontology_widget_version = \
-                                    st.session_state.get("ontology_widget_version", 0) + 1
-                                st.rerun()
-                            # The catalog changed on disk; drop both caches so
-                            # the entry shows up as downloaded from now on.
-                            _load_ontology_catalog.clear()
-                            st.session_state.available_ontologies = []
-                        st.session_state.selected_ontologies.append(acronym)
-                        st.session_state.ontologies_changed = True
-                        st.rerun()
-                    else:
-                        st.error("Cannot select more than " + str(max_count) + " ontologies")
-                elif not checkbox and acronym in st.session_state.selected_ontologies:
-                    st.session_state.selected_ontologies.remove(acronym)
+                name_col, btn_col = st.columns([5, 1], vertical_alignment="center")
+                name_col.write(label)
+                if btn_col.button("Add", key="add_" + acronym, disabled=at_limit):
+                    # An ontology whose BioPortal submission has moved on is
+                    # refreshed at the moment it is chosen for use.
+                    if ont.get("update_available"):
+                        with st.spinner("Updating " + acronym + " from "
+                                        "BioPortal... large ontologies can "
+                                        "take a few minutes."):
+                            ok, message = install_ontology(acronym)
+                        if not ok:
+                            st.session_state.ontology_install_error = message
+                            st.rerun()
+                        _load_ontology_catalog.clear()
+                        st.session_state.available_ontologies = []
+                    st.session_state.selected_ontologies.append(acronym)
                     st.session_state.ontologies_changed = True
                     st.rerun()
 
-                # Description for disabled checkboxes
-                if is_disabled:
-                    st.caption("Remove other selections to enable this option")
+    st.markdown('<div class="sub-heading">Selected ontologies ('
+                + str(len(selected)) + '/' + str(MAX_SELECTED_ONTOLOGIES)
+                + ')</div>', unsafe_allow_html=True)
+    if not selected:
+        st.warning("Please select at least one ontology to proceed.")
+    else:
+        names = {o["acronym"]: o["name"] for o in available_ontologies}
+        for acronym in list(selected):
+            name_col, btn_col = st.columns([5, 1], vertical_alignment="center")
+            name_col.write(acronym + " - " + names.get(acronym, acronym))
+            if btn_col.button("Remove", key="remove_" + acronym):
+                st.session_state.selected_ontologies.remove(acronym)
+                st.session_state.ontologies_changed = True
+                st.rerun()
 
     # When the selected ontologies change, previous manual search results may be
     # from ontologies that are no longer selected - clear them so stale results
