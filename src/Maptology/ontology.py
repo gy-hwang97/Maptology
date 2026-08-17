@@ -336,7 +336,7 @@ def _download_ontologies_dialog():
 # list with an Add button per row, the Selected list underneath with a Remove
 # button per row, and a dialog for fetching more from BioPortal.
 def render_ontology_selection(available_ontologies):
-    st.markdown('<div class="section-header section-purple">Select Ontologies</div>', unsafe_allow_html=True)
+    # st.markdown('<div class="section-header section-purple">Select Ontologies</div>', unsafe_allow_html=True)
 
     # A download attempted on the previous rerun may have failed; the message
     # has to survive that rerun, so it travels through session state.

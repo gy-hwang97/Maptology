@@ -141,8 +141,9 @@ if uploaded_file:
 
     # Step 4: select / add the ontologies to search. Any ontology auto-selected by
     # the import above is already checked here.
-    st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
     st.write("### Step 4: Select Ontologies")
+
+    # st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
     st.caption("Select one or more ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
     render_ontology_selection(available_ontologies)
 
