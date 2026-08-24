@@ -55,6 +55,11 @@ FAILURES_FILE = os.path.join(OWL_DIR, "build_failures.json")
 # days instead of on every start.
 CATALOGUE_FILE = os.path.join(OWL_DIR, "bioportal_catalogue.json")
 CATALOGUE_MAX_AGE_DAYS = 30
+# Bumped when the fields or filtering in a saved catalogue change, so a copy
+# written by older code is treated as stale and refetched once. Raised to 2
+# when catalogue entries began excluding ontologies BioPortal cannot serve a
+# file for (their download 404s); an old copy still listing them is refetched.
+CATALOGUE_FORMAT = 2
 # One line per download, per index and per run. Spans, not totals: what a run
 # costs depends on how far the two phases overlap, and that cannot be recovered
 # from a remembered figure afterwards.
@@ -301,7 +306,8 @@ def fetch_catalogue(api_key, only=None):
     resp = requests.get(
         API_BASE + "/submissions",
         params={"apikey": api_key,
-                "include": "submissionId,version,released,hasOntologyLanguage,ontology",
+                "include": "submissionId,version,released,hasOntologyLanguage,"
+                           "submissionStatus,ontology",
                 "display_links": "false", "display_context": "false"},
         timeout=600)
     resp.raise_for_status()
@@ -325,6 +331,13 @@ def fetch_catalogue(api_key, only=None):
         else:
             skipped[language or "UNKNOWN"] = skipped.get(language or "UNKNOWN", 0) + 1
             continue
+        # BioPortal lists a submission even when it never produced a downloadable
+        # file; those 404 on download (ADMIN is one). A completed RDF conversion
+        # shows up as "RDF" in the submission status, so require it - otherwise
+        # the ontology would sit on the Download page only to fail when clicked.
+        if "RDF" not in (sub.get("submissionStatus") or []):
+            skipped["NO DOWNLOAD"] = skipped.get("NO DOWNLOAD", 0) + 1
+            continue
         out.append({
             "acronym": acronym,
             "name": (ont.get("name") if isinstance(ont, dict) else "") or acronym,
@@ -346,7 +359,8 @@ def save_catalogue(catalogue):
     os.makedirs(OWL_DIR, exist_ok=True)
     tmp = CATALOGUE_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump({"fetched_at": time.time(), "ontologies": catalogue}, fh)
+        json.dump({"fetched_at": time.time(), "format": CATALOGUE_FORMAT,
+                   "ontologies": catalogue}, fh)
     os.replace(tmp, CATALOGUE_FILE)
 
 
@@ -362,6 +376,10 @@ def load_saved_catalogue(max_age_days=None):
         catalogue = data["ontologies"]
         fetched_at = float(data["fetched_at"])
     except (ValueError, KeyError, TypeError, OSError):
+        return None
+    # A copy written before the current format is treated as absent, so it is
+    # refetched once with today's fields and filtering.
+    if data.get("format") != CATALOGUE_FORMAT:
         return None
     if max_age_days is not None:
         if time.time() - fetched_at > max_age_days * 86400:
