@@ -164,6 +164,11 @@ def add_css():
     [data-testid="stTextInput"] label p {
         font-size: 20px !important;
     }
+    /* The text typed and the placeholder inside an input; keep them at the
+       app's body size instead of the browser default, which looked small. */
+    [data-testid="stTextInput"] input {
+        font-size: 18px !important;
+    }
     [data-testid="stExpander"] p {
         font-size: 16px !important;
     }

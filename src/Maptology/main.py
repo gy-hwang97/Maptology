@@ -144,7 +144,6 @@ if uploaded_file:
     st.write("### Step 4: Select Ontologies")
 
     # st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
-    st.caption("Select one or more ontologies that are most relevant to your data. When you map ontology terms to your data, we will limit our search to these ontologies, thus speeding up the process.")
     render_ontology_selection(available_ontologies)
 
     # Column selection and ontology mapping section (requires ontologies)

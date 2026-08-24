@@ -332,9 +332,10 @@ def _download_ontologies_dialog():
         st.rerun()  # full rerun closes the dialog and refreshes the lists
 
 
-# Render ontology selection: a filter box over the Available (downloaded)
-# list with an Add button per row, the Selected list underneath with a Remove
-# button per row, and a dialog for fetching more from BioPortal.
+# Render ontology selection. A statement explains what to do; while nothing is
+# downloaded, the Available section is hidden and only the Download dialog is
+# offered. Once ontologies are on disk they appear under Available, each with a
+# Select button; chosen ones move to Selected, each with a Remove button.
 def render_ontology_selection(available_ontologies):
     # st.markdown('<div class="section-header section-purple">Select Ontologies</div>', unsafe_allow_html=True)
 
@@ -346,102 +347,128 @@ def render_ontology_selection(available_ontologies):
 
     selected = st.session_state.selected_ontologies
 
-    # The filter sits directly above the list it filters. Its widget key is
-    # versioned so Add can hand back an empty box - the added ontology was
-    # usually the query's only match, and a stale query would greet the user
-    # with an empty list right when they look for the next one.
-    filter_seq = st.session_state.get("ontology_filter_seq", 0)
-    filter_query = st.text_input("Filter ontologies",
-                                 placeholder="Type to filter available ontologies...",
-                                 key="ontology_filter_" + str(filter_seq))
+    # What is on disk decides both the wording below and which sections show.
+    n_downloaded = sum(1 for o in available_ontologies if o.get("downloaded", False))
+    total = len(available_ontologies)
+    # "Everything is here" when the whole catalogue is downloaded, or on a
+    # download-everything install where it is already on its way.
+    all_downloaded = download_all_requested() or (total > 0 and n_downloaded >= total)
 
-    header_col, button_col = st.columns([3, 1], vertical_alignment="bottom")
-    with header_col:
+    statement = ("Before you can annotate your data, you must specify one or "
+                 "more ontologies to use.")
+    if all_downloaded:
+        pass  # nothing left to download, so no extra guidance
+    elif n_downloaded == 0:
+        statement += (" Hundreds of ontologies are available on BioPortal. "
+                      "However, to use these, you must first download them. To "
+                      "do so, click on the \"Download ontologies\" button below.")
+    else:
+        statement += (" Hundreds of ontologies are available on BioPortal. The "
+                      "ontologies you have downloaded are shown below. If you "
+                      "would like to download more, click on the \"Download "
+                      "ontologies\" button below.")
+    st.caption(statement)
+
+    # The Download button is offered until everything is downloaded. Rendered on
+    # its own so it sits left-aligned at the start of the line.
+    if not all_downloaded:
+        if st.button("Download ontologies", key="open_download_dialog"):
+            _download_ontologies_dialog()
+
+    # Available ontologies stay hidden until at least one has been downloaded.
+    if n_downloaded > 0:
         st.markdown('<div class="sub-heading">Available ontologies</div>',
                     unsafe_allow_html=True)
-    # On a download-everything install the whole catalogue is already local
-    # (or on its way), so there is nothing for the button to offer.
-    if not download_all_requested():
-        with button_col:
-            if st.button("Download ontologies", key="open_download_dialog"):
-                _download_ontologies_dialog()
+        st.caption("The following ontologies have been downloaded. Select any "
+                   "that you wish to use when annotating your data.")
 
-    available = [o for o in available_ontologies
-                 if o.get("downloaded", False) and o["acronym"] not in selected]
-    if filter_query:
-        q = filter_query.lower()
-        available = [o for o in available
-                     if q in o["acronym"].lower() or q in o["name"].lower()]
+        # The filter sits directly under the heading and shows only while the
+        # list does. Its label is hidden - the placeholder already says what it
+        # is for. The key is versioned so Select can hand back an empty box: the
+        # chosen ontology was usually the query's only match, and a stale query
+        # would otherwise greet the user with an empty list.
+        filter_seq = st.session_state.get("ontology_filter_seq", 0)
+        filter_query = st.text_input(
+            "Filter ontologies",
+            placeholder="Type to filter available ontologies...",
+            label_visibility="collapsed",
+            key="ontology_filter_" + str(filter_seq))
 
-    at_limit = len(selected) >= MAX_SELECTED_ONTOLOGIES
-    if at_limit:
-        st.warning("Maximum of " + str(MAX_SELECTED_ONTOLOGIES) + " ontologies "
-                   "selected. Remove one to add another.")
-
-    if not available:
+        available = [o for o in available_ontologies
+                     if o.get("downloaded", False) and o["acronym"] not in selected]
         if filter_query:
-            # An empty result usually has a reason the user can act on: the
-            # match is already selected, or it exists but is not downloaded.
-            # Say which, rather than a bare "no match".
             q = filter_query.lower()
-            already = [o["acronym"] for o in available_ontologies
-                       if o["acronym"] in selected
-                       and (q in o["acronym"].lower() or q in o["name"].lower())]
-            downloadable = [o["acronym"] for o in available_ontologies
-                            if not o.get("downloaded", False)
-                            and o["acronym"] not in selected
-                            and (q in o["acronym"].lower() or q in o["name"].lower())]
-            if already:
-                st.caption(", ".join(already)
-                           + (" is" if len(already) == 1 else " are")
-                           + " already selected - see Selected ontologies below.")
-            if downloadable:
-                shown = ", ".join(downloadable[:5])
-                if len(downloadable) > 5:
-                    shown += " and %d more" % (len(downloadable) - 5)
-                st.caption(shown
-                           + (" is" if len(downloadable) == 1 else " are")
-                           + " not on this machine yet - use \"Download "
-                             "ontologies\" to fetch "
-                           + ("it." if len(downloadable) == 1 else "them."))
-            if not already and not downloadable:
-                st.caption("No available ontology matches '" + filter_query + "'.")
-        else:
-            st.caption("Nothing downloaded yet - use \"Download ontologies\" "
-                       "to fetch some from BioPortal.")
-    else:
-        with st.container(height=350):
-            for ont in available:
-                acronym = ont["acronym"]
-                label = acronym + " - " + ont["name"]
-                if ont.get("update_available"):
-                    label += "  (update available)"
-                name_col, btn_col = st.columns([5, 1], vertical_alignment="center")
-                name_col.write(label)
-                if btn_col.button("Add", key="add_" + acronym, disabled=at_limit):
-                    # An ontology whose BioPortal submission has moved on is
-                    # refreshed at the moment it is chosen for use.
-                    if ont.get("update_available"):
-                        with st.spinner("Updating " + acronym + " from "
-                                        "BioPortal... large ontologies can "
-                                        "take a few minutes."):
-                            ok, message = install_ontology(acronym)
-                        if not ok:
-                            st.session_state.ontology_install_error = message
-                            st.rerun()
-                        _load_ontology_catalog.clear()
-                        st.session_state.available_ontologies = []
-                    st.session_state.ontology_filter_seq = filter_seq + 1
-                    st.session_state.selected_ontologies.append(acronym)
-                    st.session_state.ontologies_changed = True
-                    st.rerun()
+            available = [o for o in available
+                         if q in o["acronym"].lower() or q in o["name"].lower()]
 
-    st.markdown('<div class="sub-heading">Selected ontologies ('
-                + str(len(selected)) + '/' + str(MAX_SELECTED_ONTOLOGIES)
-                + ')</div>', unsafe_allow_html=True)
-    if not selected:
-        st.warning("Please select at least one ontology to proceed.")
-    else:
+        at_limit = len(selected) >= MAX_SELECTED_ONTOLOGIES
+        if at_limit:
+            st.warning("Maximum of " + str(MAX_SELECTED_ONTOLOGIES) + " ontologies "
+                       "selected. Remove one to add another.")
+
+        if not available:
+            if filter_query:
+                # An empty result usually has a reason the user can act on: the
+                # match is already selected, or it exists but is not downloaded.
+                q = filter_query.lower()
+                already = [o["acronym"] for o in available_ontologies
+                           if o["acronym"] in selected
+                           and (q in o["acronym"].lower() or q in o["name"].lower())]
+                downloadable = [o["acronym"] for o in available_ontologies
+                                if not o.get("downloaded", False)
+                                and o["acronym"] not in selected
+                                and (q in o["acronym"].lower() or q in o["name"].lower())]
+                if already:
+                    st.caption(", ".join(already)
+                               + (" is" if len(already) == 1 else " are")
+                               + " already selected - see Selected ontologies below.")
+                if downloadable:
+                    shown = ", ".join(downloadable[:5])
+                    if len(downloadable) > 5:
+                        shown += " and %d more" % (len(downloadable) - 5)
+                    st.caption(shown
+                               + (" is" if len(downloadable) == 1 else " are")
+                               + " not on this machine yet - use \"Download "
+                                 "ontologies\" to fetch "
+                               + ("it." if len(downloadable) == 1 else "them."))
+                if not already and not downloadable:
+                    st.caption("No available ontology matches '" + filter_query + "'.")
+            else:
+                st.caption("Every downloaded ontology is already selected.")
+        else:
+            with st.container(height=350):
+                for ont in available:
+                    acronym = ont["acronym"]
+                    label = acronym + " - " + ont["name"]
+                    if ont.get("update_available"):
+                        label += "  (update available)"
+                    # Button right beside the name (rest of the row is space),
+                    # like the Step 5 search results.
+                    btn_col, name_col = st.columns([1.3, 8], vertical_alignment="center")
+                    if btn_col.button("Select", key="add_" + acronym, disabled=at_limit):
+                        # An ontology whose BioPortal submission has moved on is
+                        # refreshed at the moment it is chosen for use.
+                        if ont.get("update_available"):
+                            with st.spinner("Updating " + acronym + " from "
+                                            "BioPortal... large ontologies can "
+                                            "take a few minutes."):
+                                ok, message = install_ontology(acronym)
+                            if not ok:
+                                st.session_state.ontology_install_error = message
+                                st.rerun()
+                            _load_ontology_catalog.clear()
+                            st.session_state.available_ontologies = []
+                        st.session_state.ontology_filter_seq = filter_seq + 1
+                        st.session_state.selected_ontologies.append(acronym)
+                        st.session_state.ontologies_changed = True
+                        st.rerun()
+                    name_col.write(label)
+
+    # Selected ontologies appear only once at least one has been chosen.
+    if selected:
+        st.markdown('<div class="sub-heading">Selected ontologies ('
+                    + str(len(selected)) + '/' + str(MAX_SELECTED_ONTOLOGIES)
+                    + ')</div>', unsafe_allow_html=True)
         names = {o["acronym"]: o["name"] for o in available_ontologies}
         for acronym in list(selected):
             name_col, btn_col = st.columns([5, 1], vertical_alignment="center")
