@@ -13,70 +13,47 @@ from utils import get_friendly_dtype, display_column_info, get_column_data_type,
 
 
 def _render_term_checklist(df, key_prefix, column):
-    """Render a checklist of search results. Checked-state is derived from the
-    column mapping (single source of truth); toggling adds/removes the term."""
-    version = st.session_state.get("mapping_version", 0)
-    # The checkbox key is derived from the term URI (its stable identity), NOT the
-    # row position. A position-based key gets reused when a new search puts a
-    # different term at the same row, so Streamlit keeps showing the old checked
-    # state. Drop duplicate URIs first so two rows can never produce the same key
-    # (the same IRI can appear in more than one ontology's results -> DuplicateWidgetID).
-    df = df.drop_duplicates(subset=["Ontology Term URI"], keep="first").reset_index(drop=True)
+    """Render search results as a left-aligned list with an Add button per term.
 
-    # Three aligned columns with thin light-gray dividers between them:
-    # Term (checkbox) | Ontology | Details (ℹ️).
-    COLS = [4, 0.1, 1.5, 0.1, 1, 5.3]
-    DIVIDER = "<div style='border-left:1px solid #d9d9d9; height:2.2em;'></div>"
-    h_term, _hs1, h_ont, _hs2, h_icon, _h_sp = st.columns(COLS)
-    # Indent the Term header so it lines up with the value text, which sits to the
-    # right of the checkbox box below it.
-    h_term.markdown("<div style='padding-left:1.8rem;'><strong>Term</strong></div>", unsafe_allow_html=True)
-    h_ont.markdown("<strong>Ontology</strong>", unsafe_allow_html=True)
-    h_icon.markdown("<strong>Details</strong>", unsafe_allow_html=True)
+    A term already mapped is hidden here - it lives in the mapped-terms table
+    below, where it can be removed. Clicking Add records the term in the column
+    mapping (the single source of truth) and confirms with a small toast."""
+    # The same IRI can appear under more than one ontology; keep one row per URI.
+    df = df.drop_duplicates(subset=["Ontology Term URI"], keep="first").reset_index(drop=True)
+    # Hide terms already added, so Add never re-adds one that is already mapped.
+    keep = [not is_column_term_mapped(column, u) for u in df["Ontology Term URI"]]
+    df = df[keep].reset_index(drop=True)
+    if len(df) == 0:
+        st.caption("Every matching term has been added. Remove one from the "
+                   "table below to add it again.")
+        return
 
     for i in range(len(df)):
         row = df.iloc[i]
-        term_uri = row['Ontology Term URI']
-        is_checked = is_column_term_mapped(column, term_uri)
+        term_uri = row["Ontology Term URI"]
         term_key = hashlib.sha1(str(term_uri).encode("utf-8")).hexdigest()[:16]
-        # column MUST be in the key too, so switching columns can't reuse another
-        # column's widget state for the same term.
-        unique_key = key_prefix + "__" + str(column) + "__" + term_key + "__" + str(version)
-
-        term_col, sep1, ont_col, sep2, info_btn_col, _spacer = st.columns(COLS, vertical_alignment="center")
-        with term_col:
-            result = st.checkbox(row['Preferred Label'], value=is_checked, key=unique_key)
-        sep1.markdown(DIVIDER, unsafe_allow_html=True)
-        with ont_col:
-            # Render the ontology as a DISABLED tertiary button (not markdown): it
-            # is the same widget family as the ℹ️ button, which already lines up
-            # with the checkbox, so it sits on the same line. Plain markdown text
-            # centers within its block and drifts slightly lower than the widgets.
-            st.button(str(row['Ontology Name']), key="ont_" + unique_key, disabled=True, type="tertiary")
-        sep2.markdown(DIVIDER, unsafe_allow_html=True)
-        with info_btn_col:
-            if st.button("ℹ️", key="prev_" + unique_key, help="View term details", type="tertiary"):
-                ontology_info = get_ontology_details(row['Ontology Name'])
-                show_term_modal({
-                    "pref_label": row['Preferred Label'],
-                    "ontology_abbr": row['Ontology Name'],
-                    "full_ontology_name": ontology_info['full_name'],
-                    "definition": row['Definition'],
-                    "term_uri": row['Ontology Term URI'],
-                    "synonyms": row.get('Synonyms', []),
-                })
-
-        if result != is_checked:
-            # A direct checkbox toggle. The click already triggered one rerun, so
-            # just update the mapping and let this run finish - the results table
-            # below re-renders from the updated mapping in the same run. No
-            # st.rerun() (would double the work) and no version bump (would rebuild
-            # every checkbox). This is what keeps fast consecutive clicks from
-            # dropping selections.
-            if result:
-                add_column_term(column, row)
-            else:
-                remove_column_term(column, term_uri)
+        base = key_prefix + "__" + str(column) + "__" + term_key
+        # Add button beside the term and its ontology, packed left; details last.
+        with st.container(horizontal=True, vertical_alignment="center"):
+            add_clicked = st.button("Add", key="add_" + base)
+            st.markdown(str(row["Preferred Label"]) + "  —  "
+                        + str(row["Ontology Name"]))
+            info_clicked = st.button("ℹ️", key="info_" + base,
+                                     help="View term details", type="tertiary")
+        if add_clicked:
+            add_column_term(column, row)
+            st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
+            st.rerun()
+        if info_clicked:
+            ontology_info = get_ontology_details(row["Ontology Name"])
+            show_term_modal({
+                "pref_label": row["Preferred Label"],
+                "ontology_abbr": row["Ontology Name"],
+                "full_ontology_name": ontology_info["full_name"],
+                "definition": row["Definition"],
+                "term_uri": row["Ontology Term URI"],
+                "synonyms": row.get("Synonyms", []),
+            })
 
 
 # Render column selection and ontology mapping section
@@ -148,13 +125,13 @@ def render_column_mapping_section():
                         and len(st.session_state.filtered_ontology_results) > 0)
 
             st.markdown('<div class="sub-heading">Select ontology terms</div>', unsafe_allow_html=True)
-            st.caption("Select ontology terms by checking the boxes below, or click the ℹ️ icon to view a term's details. You can also search for more terms.")
+            st.caption("Add ontology terms with the Add button, or click the ℹ️ icon to view a term's details. You can also search for more terms.")
 
             # Full-width list. Term details open in a modal popup (ℹ️) instead of
             # an always-on side panel, so the list can use the whole width.
             if has_auto:
                 with st.container(height=300):
-                    st.write("Select one or more terms that match your column:")
+                    st.write("Click Add next to any term that matches your column:")
                     _render_term_checklist(
                         st.session_state.filtered_ontology_results,
                         "col_auto",
@@ -195,7 +172,7 @@ def render_column_mapping_section():
                     st.markdown('<div class="sub-heading">Search Results</div>', unsafe_allow_html=True)
                     if len(manual_df) > 0:
                         with st.container(height=300):
-                            st.write("Select one or more terms from search results:")
+                            st.write("Click Add next to any term from the search results:")
                             _render_term_checklist(manual_df, "col_manual", selected_column)
                     else:
                         st.caption("All matching terms are already listed above.")

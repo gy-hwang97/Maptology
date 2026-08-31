@@ -24,6 +24,13 @@ add_css()
 # Initialize session state
 initialize_session()
 
+# A one-shot confirmation left by an Add click on the previous run. Toasts do
+# not survive the st.rerun() that clears the added term from the results list,
+# so the message is carried across in session state and shown here.
+_added_toast = st.session_state.pop("term_added_toast", None)
+if _added_toast:
+    st.toast(_added_toast)
+
 # Display logo and title
 render_header()
 

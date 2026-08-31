@@ -17,65 +17,48 @@ VALUE_FILTER_THRESHOLD = 25
 
 
 def _render_value_checklist(df, key_prefix, column, value):
-    """Render a checklist of value search results. Checked-state is derived
-    from value_ontology_mapping (single source of truth)."""
-    version = st.session_state.get("mapping_version", 0)
-    # Key is derived from the term URI (stable identity), not the row position, so
-    # a new search can't inherit the previous result's checked state. Drop duplicate
-    # URIs first to avoid DuplicateWidgetID (same IRI across ontologies).
-    df = df.drop_duplicates(subset=["Ontology Term URI"], keep="first").reset_index(drop=True)
+    """Render value search results as a left-aligned list with an Add button.
 
-    # Three aligned columns with thin light-gray dividers between them:
-    # Term (checkbox) | Ontology | Details (ℹ️).
-    COLS = [4, 0.1, 1.5, 0.1, 1, 5.3]
-    DIVIDER = "<div style='border-left:1px solid #d9d9d9; height:2.2em;'></div>"
-    h_term, _hs1, h_ont, _hs2, h_icon, _h_sp = st.columns(COLS)
-    # Indent the Term header so it lines up with the value text, which sits to the
-    # right of the checkbox box below it.
-    h_term.markdown("<div style='padding-left:1.8rem;'><strong>Term</strong></div>", unsafe_allow_html=True)
-    h_ont.markdown("<strong>Ontology</strong>", unsafe_allow_html=True)
-    h_icon.markdown("<strong>Details</strong>", unsafe_allow_html=True)
+    A term already mapped to this value is hidden here - it lives in the value
+    mappings table below, where it can be removed. Clicking Add records it in
+    value_ontology_mapping (the single source of truth) and confirms with a
+    small toast."""
+    # The same IRI can appear under more than one ontology; keep one row per URI.
+    df = df.drop_duplicates(subset=["Ontology Term URI"], keep="first").reset_index(drop=True)
+    # Hide terms already added to this value.
+    keep = [not is_value_term_mapped(column, value, u) for u in df["Ontology Term URI"]]
+    df = df[keep].reset_index(drop=True)
+    if len(df) == 0:
+        st.caption("Every matching term has been added. Remove one from the "
+                   "table below to add it again.")
+        return
 
     for i in range(len(df)):
         row = df.iloc[i]
-        term_uri = row['Ontology Term URI']
-        is_checked = is_value_term_mapped(column, value, term_uri)
+        term_uri = row["Ontology Term URI"]
         term_key = hashlib.sha1(str(term_uri).encode("utf-8")).hexdigest()[:16]
-        # column AND value MUST be in the key so switching value/column can't
-        # reuse another value's widget state for the same term.
-        unique_key = key_prefix + "__" + str(column) + "__" + str(value) + "__" + term_key + "__" + str(version)
-
-        term_col, sep1, ont_col, sep2, info_btn_col, _spacer = st.columns(COLS, vertical_alignment="center")
-        with term_col:
-            result = st.checkbox(row['Preferred Label'], value=is_checked, key=unique_key)
-        sep1.markdown(DIVIDER, unsafe_allow_html=True)
-        with ont_col:
-            # Render the ontology as a DISABLED tertiary button (not markdown): it
-            # is the same widget family as the ℹ️ button, which already lines up
-            # with the checkbox, so it sits on the same line. Plain markdown text
-            # centers within its block and drifts slightly lower than the widgets.
-            st.button(str(row['Ontology Name']), key="ont_" + unique_key, disabled=True, type="tertiary")
-        sep2.markdown(DIVIDER, unsafe_allow_html=True)
-        with info_btn_col:
-            if st.button("ℹ️", key="prev_" + unique_key, help="View term details", type="tertiary"):
-                ontology_info = get_ontology_details(row['Ontology Name'])
-                show_term_modal({
-                    "pref_label": row['Preferred Label'],
-                    "ontology_abbr": row['Ontology Name'],
-                    "full_ontology_name": ontology_info['full_name'],
-                    "definition": row['Definition'],
-                    "term_uri": row['Ontology Term URI'],
-                    "synonyms": row.get('Synonyms', []),
-                })
-
-        if result != is_checked:
-            # Direct checkbox toggle: the click already reran. Update the mapping
-            # only - no st.rerun() (avoids the second full rerun) and no version
-            # bump (avoids rebuilding every checkbox), so fast clicks aren't dropped.
-            if result:
-                add_value_term(column, value, row)
-            else:
-                remove_value_term(column, value, term_uri)
+        base = key_prefix + "__" + str(column) + "__" + str(value) + "__" + term_key
+        # Add button beside the term and its ontology, packed left; details last.
+        with st.container(horizontal=True, vertical_alignment="center"):
+            add_clicked = st.button("Add", key="add_" + base)
+            st.markdown(str(row["Preferred Label"]) + "  —  "
+                        + str(row["Ontology Name"]))
+            info_clicked = st.button("ℹ️", key="info_" + base,
+                                     help="View term details", type="tertiary")
+        if add_clicked:
+            add_value_term(column, value, row)
+            st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
+            st.rerun()
+        if info_clicked:
+            ontology_info = get_ontology_details(row["Ontology Name"])
+            show_term_modal({
+                "pref_label": row["Preferred Label"],
+                "ontology_abbr": row["Ontology Name"],
+                "full_ontology_name": ontology_info["full_name"],
+                "definition": row["Definition"],
+                "term_uri": row["Ontology Term URI"],
+                "synonyms": row.get("Synonyms", []),
+            })
 
 
 # Render value mapping section
@@ -101,6 +84,11 @@ def render_value_mapping_section():
     # If user selected String, allow value mapping even for numeric data
     if user_type == "String":
         show_value_mapping = True
+    elif user_type in ("Date", "Datetime", "Time"):
+        # Date/time columns often read as object (unparsed date strings), which
+        # would otherwise fall through to the object branch below and wrongly
+        # offer value mapping. The user's chosen type wins: no value mapping.
+        show_value_mapping = False
     elif dtype_name in ['object', 'str'] or dtype_name.startswith('string') or dtype_name == 'category':
         show_value_mapping = True
     else:
@@ -166,7 +154,7 @@ def render_value_mapping_section():
 
                 # Full-width list. Term details open in a modal popup (ℹ️).
                 with st.container(height=300):
-                    st.write("Select one or more terms that match '" + str(selected_value) + "':")
+                    st.write("Click Add next to any term that matches '" + str(selected_value) + "':")
                     _render_value_checklist(
                         st.session_state.value_ontology_results,
                         "val_auto",
@@ -205,7 +193,7 @@ def render_value_mapping_section():
                     st.markdown('<div class="sub-heading">Search Results</div>', unsafe_allow_html=True)
                     if len(manual_df) > 0:
                         with st.container(height=300):
-                            st.write("Select one or more terms from search results:")
+                            st.write("Click Add next to any term from the search results:")
                             _render_value_checklist(
                                 manual_df,
                                 "val_manual",

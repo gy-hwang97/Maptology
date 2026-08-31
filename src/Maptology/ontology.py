@@ -313,9 +313,11 @@ def _download_ontologies_dialog():
         with st.container(height=380):
             for ont in candidates:
                 acronym = ont["acronym"]
-                name_col, btn_col = st.columns([5, 1], vertical_alignment="center")
-                name_col.write(acronym + " - " + ont["name"])
-                if btn_col.button("Download", key="download_" + acronym):
+                # Button next to the name, packed left (see the Available list).
+                with st.container(horizontal=True, vertical_alignment="center"):
+                    clicked = st.button("Download", key="download_" + acronym)
+                    st.markdown(acronym + " - " + ont["name"])
+                if clicked:
                     with st.spinner("Downloading " + acronym + " from BioPortal..."):
                         ok, message = install_ontology(acronym)
                     if ok:
@@ -442,10 +444,13 @@ def render_ontology_selection(available_ontologies):
                     label = acronym + " - " + ont["name"]
                     if ont.get("update_available"):
                         label += "  (update available)"
-                    # Button right beside the name (rest of the row is space),
-                    # like the Step 5 search results.
-                    btn_col, name_col = st.columns([1.3, 8], vertical_alignment="center")
-                    if btn_col.button("Select", key="add_" + acronym, disabled=at_limit):
+                    # Button next to the name, packed left, so a wide screen
+                    # leaves the empty space on the right, not between them.
+                    with st.container(horizontal=True, vertical_alignment="center"):
+                        clicked = st.button("Select", key="add_" + acronym,
+                                            disabled=at_limit)
+                        st.markdown(label)
+                    if clicked:
                         # An ontology whose BioPortal submission has moved on is
                         # refreshed at the moment it is chosen for use.
                         if ont.get("update_available"):
@@ -462,7 +467,6 @@ def render_ontology_selection(available_ontologies):
                         st.session_state.selected_ontologies.append(acronym)
                         st.session_state.ontologies_changed = True
                         st.rerun()
-                    name_col.write(label)
 
     # Selected ontologies appear only once at least one has been chosen.
     if selected:
@@ -471,9 +475,11 @@ def render_ontology_selection(available_ontologies):
                     + ')</div>', unsafe_allow_html=True)
         names = {o["acronym"]: o["name"] for o in available_ontologies}
         for acronym in list(selected):
-            name_col, btn_col = st.columns([5, 1], vertical_alignment="center")
-            name_col.write(acronym + " - " + names.get(acronym, acronym))
-            if btn_col.button("Remove", key="remove_" + acronym):
+            # Remove on the left, next to the name, matching the Available list.
+            with st.container(horizontal=True, vertical_alignment="center"):
+                clicked = st.button("Remove", key="remove_" + acronym)
+                st.markdown(acronym + " - " + names.get(acronym, acronym))
+            if clicked:
                 st.session_state.selected_ontologies.remove(acronym)
                 st.session_state.ontologies_changed = True
                 st.rerun()
