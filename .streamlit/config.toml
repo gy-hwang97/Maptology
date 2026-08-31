@@ -1,0 +1,5 @@
+[server]
+# Mapping and data files uploaded here are small; cap uploads at 20 MB so a
+# huge wrong file fails fast instead of being read in full. (Streamlit's
+# default is 200 MB.)
+maxUploadSize = 20

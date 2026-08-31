@@ -535,7 +535,7 @@ def render_import_section():
     seq = st.session_state.get("mapping_uploader_seq", 0)
     uploaded = st.file_uploader(
         "Mapping file (LinkML .yaml / SSSOM .tsv)",
-        type=["yaml", "yml", "tsv", "json"],
+        type=["yaml", "yml", "tsv"],
         key="mapping_import_uploader_" + str(seq),
     )
 
