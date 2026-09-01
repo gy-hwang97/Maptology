@@ -58,8 +58,9 @@ CATALOGUE_MAX_AGE_DAYS = 30
 # Bumped when the fields or filtering in a saved catalogue change, so a copy
 # written by older code is treated as stale and refetched once. Raised to 2
 # when catalogue entries began excluding ontologies BioPortal cannot serve a
-# file for (their download 404s); an old copy still listing them is refetched.
-CATALOGUE_FORMAT = 2
+# file for (their download 404s); raised to 3 when each entry gained a
+# description for the info button. An old copy is refetched to fill these in.
+CATALOGUE_FORMAT = 3
 # One line per download, per index and per run. Spans, not totals: what a run
 # costs depends on how far the two phases overlap, and that cannot be recovered
 # from a remembered figure afterwards.
@@ -306,8 +307,8 @@ def fetch_catalogue(api_key, only=None):
     resp = requests.get(
         API_BASE + "/submissions",
         params={"apikey": api_key,
-                "include": "submissionId,version,released,hasOntologyLanguage,"
-                           "submissionStatus,ontology",
+                "include": "submissionId,version,released,description,"
+                           "hasOntologyLanguage,submissionStatus,ontology",
                 "display_links": "false", "display_context": "false"},
         timeout=600)
     resp.raise_for_status()
@@ -346,6 +347,7 @@ def fetch_catalogue(api_key, only=None):
             "submissionId": sub.get("submissionId"),
             "version": sub.get("version"),
             "released": sub.get("released"),
+            "description": sub.get("description") or "",
         })
     if skipped:
         worst = sorted(skipped.items(), key=lambda kv: -kv[1])[:3]

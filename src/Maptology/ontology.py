@@ -30,20 +30,24 @@ def _load_ontology_catalog():
         merged.append({
             "acronym": acronym,
             "name": entry.get("name") or acronym,
-            "description": "",
+            "description": entry.get("description") or "",
+            "version": entry.get("version") or "",
+            "released": entry.get("released") or "",
             "downloaded": downloaded,
             "update_available": downloaded
                 and recorded.get(acronym) != entry.get("submissionId"),
         })
     # Ontologies built locally that BioPortal no longer lists (this happens:
     # CMEO, CVO and HTO were withdrawn from its catalogue). They keep working;
-    # there is just nothing to update them from.
+    # there is just nothing to update them from, and no catalogue description.
     for acronym, entry in built.items():
         if acronym not in catalogue:
             merged.append({
                 "acronym": acronym,
                 "name": entry.get("name") or acronym,
                 "description": "",
+                "version": "",
+                "released": "",
                 "downloaded": True,
                 "update_available": False,
             })
@@ -285,6 +289,25 @@ def search_bioportal_manual_column(search_term):
 MAX_SELECTED_ONTOLOGIES = 10
 
 
+def _ontology_info_popover(ont):
+    """An info button that opens a small panel with the ontology's description,
+    version and release date. A popover rather than a dialog, so it also works
+    inside the download dialog (dialogs cannot be nested)."""
+    with st.popover("ℹ️", help="View description"):
+        st.markdown("**" + ont["acronym"] + " - " + ont["name"] + "**")
+        if ont.get("description"):
+            st.write(ont["description"])
+        else:
+            st.caption("No description available.")
+        meta = []
+        if ont.get("version"):
+            meta.append("Version: " + str(ont["version"]))
+        if ont.get("released"):
+            meta.append("Released: " + str(ont["released"])[:10])
+        if meta:
+            st.caption("  |  ".join(meta))
+
+
 @st.dialog("Download ontologies", width="large")
 def _download_ontologies_dialog():
     """Fetch ontologies from BioPortal, one click each.
@@ -297,6 +320,11 @@ def _download_ontologies_dialog():
                "Most download in seconds; the largest take a few minutes. "
                "Downloaded ontologies appear under Available ontologies.")
 
+    # A download on the previous fragment rerun left a confirmation to show.
+    success = st.session_state.pop("download_success_msg", None)
+    if success:
+        st.success(success)
+
     query = st.text_input("Search downloadable ontologies",
                           placeholder="Type to filter...",
                           key="download_dialog_filter")
@@ -308,7 +336,15 @@ def _download_ontologies_dialog():
                       if q in o["acronym"].lower() or q in o["name"].lower()]
 
     if not candidates:
-        st.info("Nothing matches, or everything is already downloaded.")
+        # After a download the confirmation above already explains the empty
+        # list, so the "nothing matches" note would only confuse. Otherwise say
+        # which case it is: an unmatched search, or everything downloaded.
+        if success:
+            pass
+        elif query:
+            st.info("No downloadable ontology matches '" + query + "'.")
+        else:
+            st.info("Every available ontology has already been downloaded.")
     else:
         with st.container(height=380):
             for ont in candidates:
@@ -317,6 +353,7 @@ def _download_ontologies_dialog():
                 with st.container(horizontal=True, vertical_alignment="center"):
                     clicked = st.button("Download", key="download_" + acronym)
                     st.markdown(acronym + " - " + ont["name"])
+                    _ontology_info_popover(ont)
                 if clicked:
                     with st.spinner("Downloading " + acronym + " from BioPortal..."):
                         ok, message = install_ontology(acronym)
@@ -324,6 +361,8 @@ def _download_ontologies_dialog():
                         # The catalog on disk changed; drop the caches so this
                         # entry moves to Available, then redraw only the dialog
                         # so several ontologies can be fetched in one visit.
+                        st.session_state.download_success_msg = (
+                            ont["name"] + " was downloaded successfully.")
                         _load_ontology_catalog.clear()
                         st.session_state.available_ontologies = []
                         st.rerun(scope="fragment")
@@ -450,6 +489,7 @@ def render_ontology_selection(available_ontologies):
                         clicked = st.button("Select", key="add_" + acronym,
                                             disabled=at_limit)
                         st.markdown(label)
+                        _ontology_info_popover(ont)
                     if clicked:
                         # An ontology whose BioPortal submission has moved on is
                         # refreshed at the moment it is chosen for use.
