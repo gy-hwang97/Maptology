@@ -43,6 +43,7 @@ st.caption("Maptology helps you search and map ontology terms to your dataset co
 # =============================================================================
 
 st.write("### Step 1: Upload Data File")
+st.caption("Please click on the gray box below and then select a file to upload.")
 # A stable key keeps the uploaded file across reruns. Without it, adding other
 # widgets/sections can shift this keyless widget's identity and Streamlit resets
 # its value to None on a rerun (which would wipe the whole session).
