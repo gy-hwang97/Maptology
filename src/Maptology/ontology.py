@@ -289,23 +289,28 @@ def search_bioportal_manual_column(search_term):
 MAX_SELECTED_ONTOLOGIES = 10
 
 
-def _ontology_info_popover(ont):
-    """An info button that opens a small panel with the ontology's description,
-    version and release date. A popover rather than a dialog, so it also works
-    inside the download dialog (dialogs cannot be nested)."""
-    with st.popover("ℹ️", help="View description"):
-        st.markdown("**" + ont["acronym"] + " - " + ont["name"] + "**")
-        if ont.get("description"):
-            st.write(ont["description"])
-        else:
-            st.caption("No description available.")
-        meta = []
-        if ont.get("version"):
-            meta.append("Version: " + str(ont["version"]))
-        if ont.get("released"):
-            meta.append("Released: " + str(ont["released"])[:10])
-        if meta:
-            st.caption("  |  ".join(meta))
+def _render_ontology_details(ont):
+    """One ontology's description, version and release date."""
+    st.markdown("**" + ont["acronym"] + " - " + ont["name"] + "**")
+    if ont.get("description"):
+        st.write(ont["description"])
+    else:
+        st.write("_No description available._")
+    meta = []
+    if ont.get("version"):
+        meta.append("Version: " + str(ont["version"]))
+    if ont.get("released"):
+        meta.append("Released: " + str(ont["released"])[:10])
+    if meta:
+        st.write("  |  ".join(meta))
+
+
+@st.dialog("Ontology details")
+def _show_ontology_modal(ont):
+    """The same modal treatment the term lists in Steps 5 and 6 use."""
+    _render_ontology_details(ont)
+    if st.button("Close", key="close_ontology_modal"):
+        st.rerun()
 
 
 @st.dialog("Download ontologies", width="large")
@@ -346,6 +351,10 @@ def _download_ontologies_dialog():
         else:
             st.info("Every available ontology has already been downloaded.")
     else:
+        # Which row, if any, is showing its description. A dialog cannot be
+        # opened from inside this one, so the info button expands the details
+        # in place instead - the button itself matches Steps 5 and 6.
+        info_open = st.session_state.get("download_info_open")
         with st.container(height=380):
             for ont in candidates:
                 acronym = ont["acronym"]
@@ -353,7 +362,13 @@ def _download_ontologies_dialog():
                 with st.container(horizontal=True, vertical_alignment="center"):
                     clicked = st.button("Download", key="download_" + acronym)
                     st.markdown(acronym + " - " + ont["name"])
-                    _ontology_info_popover(ont)
+                    if st.button("ℹ️", key="dlinfo_" + acronym,
+                                 help="View description", type="tertiary"):
+                        st.session_state.download_info_open = (
+                            None if info_open == acronym else acronym)
+                        st.rerun(scope="fragment")
+                if info_open == acronym:
+                    _render_ontology_details(ont)
                 if clicked:
                     with st.spinner("Downloading " + acronym + " from BioPortal..."):
                         ok, message = install_ontology(acronym)
@@ -489,7 +504,10 @@ def render_ontology_selection(available_ontologies):
                         clicked = st.button("Select", key="add_" + acronym,
                                             disabled=at_limit)
                         st.markdown(label)
-                        _ontology_info_popover(ont)
+                        # Same info button as the term lists in Steps 5 and 6.
+                        if st.button("ℹ️", key="info_" + acronym,
+                                     help="View description", type="tertiary"):
+                            _show_ontology_modal(ont)
                     if clicked:
                         # An ontology whose BioPortal submission has moved on is
                         # refreshed at the moment it is chosen for use.
