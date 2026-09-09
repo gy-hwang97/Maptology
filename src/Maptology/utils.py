@@ -142,35 +142,59 @@ def add_css():
     [data-testid="stCaptionContainer"] {
         font-family: 'Calibri', 'Arial', sans-serif !important;
     }
+    /* Three sizes only, the logo aside: main headers (28px), subheadings
+       (22px, set on .sub-heading below) and everything else (18px). Captions,
+       widget labels, uploader hints and expander text used to sit at 15, 16 or
+       20px; they all join the body size so nothing reads as small print. */
+    .main .block-container h1,
+    .main .block-container h2,
+    .main .block-container h3 {
+        font-size: 28px !important;
+    }
     .main .block-container p,
     .main .block-container span,
     .main .block-container label,
-    .main .block-container div {
+    .main .block-container div,
+    .main .block-container li,
+    .main .block-container td,
+    .main .block-container th,
+    .main .block-container button,
+    .main .block-container input,
+    .main .block-container textarea,
+    [data-testid="stFileUploader"] label p,
+    [data-testid="stFileUploader"] small,
+    [data-testid="stFileUploader"] span,
+    [data-testid="stCaptionContainer"] p,
+    .stCaption p,
+    [data-testid="stSelectbox"] label p,
+    [data-testid="stTextInput"] label p,
+    [data-testid="stTextInput"] input,
+    [data-testid="stExpander"] p {
         font-size: 18px !important;
     }
     [data-testid="stFileUploader"] label p {
-        font-size: 18px !important;
         font-weight: 500 !important;
     }
-    [data-testid="stFileUploader"] small,
-    [data-testid="stFileUploader"] span {
-        font-size: 15px !important;
-    }
+    /* Black text throughout - Streamlit greys out captions and help text -
+       leaving only links blue. */
+    .main .block-container p,
+    .main .block-container span,
+    .main .block-container label,
+    .main .block-container li,
+    .main .block-container td,
+    .main .block-container th,
+    .main .block-container h1,
+    .main .block-container h2,
+    .main .block-container h3,
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stCaptionContainer"],
     [data-testid="stCaptionContainer"] p,
     .stCaption p {
-        font-size: 20px !important;
+        color: #000000 !important;
     }
-    [data-testid="stSelectbox"] label p,
-    [data-testid="stTextInput"] label p {
-        font-size: 20px !important;
-    }
-    /* The text typed and the placeholder inside an input; keep them at the
-       app's body size instead of the browser default, which looked small. */
-    [data-testid="stTextInput"] input {
-        font-size: 18px !important;
-    }
-    [data-testid="stExpander"] p {
-        font-size: 16px !important;
+    .main .block-container a,
+    [data-testid="stMarkdownContainer"] a {
+        color: #0068c9 !important;
     }
     .main .block-container {
         max-width: 95% !important;
@@ -185,12 +209,12 @@ def add_css():
     }
     .term-label {
         font-weight: bold;
-        color: #333;
+        color: #000000;
         margin-bottom: 4px;
     }
     .term-definition {
         font-style: italic;
-        color: #555;
+        color: #000000;
         margin-top: 4px;
     }
     div[data-testid="stDataFrame"] > div {
@@ -213,7 +237,7 @@ def add_css():
         display: inline-block;
         padding: 2px 6px;
         border-radius: 3px;
-        font-size: 0.8em;
+        font-size: 18px;
         margin-left: 8px;
         background-color: #f0f0f0;
         border: 1px solid #ddd;
@@ -239,7 +263,7 @@ def add_css():
         border-radius: 5px;
         margin-bottom: 10px;
         font-weight: bold;
-        color: #333;
+        color: #000000;
     }
     .section-purple { border-left: 5px solid #9370DB; }
     .section-red { border-left: 5px solid #FF6B6B; }
@@ -262,7 +286,7 @@ def add_css():
     .multiple-selections-box {
         border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin: 10px 0; background-color: #f9f9f9;
     }
-    .selection-summary { font-weight: bold; margin-bottom: 8px; color: #333; }
+    .selection-summary { font-weight: bold; margin-bottom: 8px; color: #000000; }
     .section-green { border-left: 5px solid #4CAF50; }
     .stFileUploader button[kind="icon"] { display: none !important; }
     .stFileUploader button[kind="secondary"] { display: none !important; }
@@ -272,7 +296,7 @@ def add_css():
     }
     [data-testid="stForm"] { border: none !important; padding: 0 !important; }
     .sub-heading {
-        font-size: 20px !important;
+        font-size: 22px !important;
         font-weight: bold !important;
         margin-top: 10px;
         margin-bottom: 5px;
