@@ -11,7 +11,9 @@ _LOGO_PATH = os.path.join(_REPO_ROOT, "maptology.png")
 
 # 로고와 제목을 컬럼으로 표시 / Display logo and title in columns
 def render_header():
-    col1, col2 = st.columns([3, 10])
+    # The logo fills its column, so halving the column's share of the row is
+    # what halves the logo - and it stays half whatever the screen width.
+    col1, col2 = st.columns([1.5, 11.5])
     with col1:
         st.image(_LOGO_PATH, width=1000)
 
