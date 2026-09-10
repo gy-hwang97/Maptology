@@ -13,7 +13,7 @@ _LOGO_PATH = os.path.join(_REPO_ROOT, "maptology.png")
 def render_header():
     # The logo fills its column, so halving the column's share of the row is
     # what halves the logo - and it stays half whatever the screen width.
-    col1, col2 = st.columns([1.5, 11.5])
+    col1, col2 = st.columns([2.25, 11.5])
     with col1:
         st.image(_LOGO_PATH, width=1000)
 
