@@ -363,7 +363,8 @@ def _download_ontologies_dialog():
                     # at once; the chevron Streamlit adds to a popover is
                     # hidden in CSS, leaving the same icon button the term
                     # lists use.
-                    with st.popover("ℹ️", help="View description"):
+                    with st.popover("ℹ️", help="View description",
+                                    type="tertiary"):
                         _render_ontology_details(ont)
                 if clicked:
                     with st.spinner("Downloading " + acronym + " from BioPortal..."):
