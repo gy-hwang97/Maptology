@@ -193,7 +193,9 @@ def add_css():
         color: #000000 !important;
     }
     .main .block-container a,
-    [data-testid="stMarkdownContainer"] a {
+    .main .block-container a *,
+    [data-testid="stMarkdownContainer"] a,
+    [data-testid="stMarkdownContainer"] a * {
         color: #0068c9 !important;
     }
     /* The download list's info control is a popover; hide the chevron
