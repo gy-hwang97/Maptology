@@ -200,7 +200,9 @@ def add_css():
     }
     /* The download list's info control is a popover; hide the chevron
        Streamlit appends so it reads as the same plain icon button the term
-       lists use. */
+       lists use. The chevron is a material icon in an aria-hidden wrapper,
+       not an svg, so target that wrapper (svg kept as a fallback). */
+    [data-testid="stPopoverButton"] [aria-hidden="true"],
     [data-testid="stPopoverButton"] svg {
         display: none !important;
     }
