@@ -36,14 +36,14 @@ render_header()
 
 # Tagline
 st.markdown("### Map your dataset to standardized ontology terms")
-st.caption("Maptology helps you search and map ontology terms to your dataset columns and values, then export the results in standardized formats.")
+st.markdown("Maptology helps you search and map ontology terms to your dataset columns and values, then export the results in standardized formats.")
 
 # =============================================================================
 # Step 1: File Upload (no API key needed)
 # =============================================================================
 
 st.write("### Step 1: Upload Data File")
-st.caption("Please click on the gray box below and then select a file to upload.")
+st.markdown("Please click on the gray box below and then select a file to upload.")
 # A stable key keeps the uploaded file across reruns. Without it, adding other
 # widgets/sections can shift this keyless widget's identity and Streamlit resets
 # its value to None on a rerun (which would wipe the whole session).
@@ -112,7 +112,7 @@ if uploaded_file:
         st.stop()
 
     st.write("### Step 2: Preview Data")
-    st.caption("This table shows the first 20 lines of your data so you can verify that the data were parsed properly.")
+    st.markdown("This table shows the first 20 lines of your data so you can verify that the data were parsed properly.")
 
     # Apply styling if there's a highlighted column
     if 'highlighted_column' in st.session_state and st.session_state.highlighted_column in df.columns:
@@ -124,11 +124,11 @@ if uploaded_file:
             return df_styler
 
         styled_df = df.head(20).style.apply(highlight_column, axis=None)
-        st.dataframe(styled_df, width='stretch', hide_index=False)
+        st.table(styled_df)
 
-        st.caption("Column '" + highlighted_col + "' highlighted due to recent type change")
+        st.markdown("Column '" + highlighted_col + "' highlighted due to recent type change")
     else:
-        st.dataframe(st.session_state.uploaded_df.head(20), width='stretch', hide_index=False)
+        st.table(st.session_state.uploaded_df.head(20))
 
     # Load the ontology catalog up front (silently). It must be available BEFORE
     # the import step so an imported file can auto-select the ontologies it uses.
@@ -204,4 +204,10 @@ else:
         st.rerun()
 
 st.write("---")
-st.caption("Maptology maps ontology terms to your dataset using precomputed TF-IDF vectors for fast search.")
+st.markdown(
+    "This application was developed by the "
+    "[Piccolo Lab](https://piccolo.byu.edu) at "
+    "[Brigham Young University](https://www.byu.edu). "
+    "To report a bug or request a feature, "
+    "[contact us](https://github.com/gy-hwang97/Maptology/issues)."
+)

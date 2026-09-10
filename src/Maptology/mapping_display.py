@@ -24,7 +24,7 @@ def _render_download_button(label, data, file_name, mime, key, disabled=False):
 # Render the mapped-terms section
 def render_mapped_terms():
     st.markdown('<div class="sub-heading">Mapped Ontology Terms</div>', unsafe_allow_html=True)
-    st.caption("This table shows all the ontology terms you have mapped to your columns. You can view term details or remove mappings.")
+    st.markdown("This table shows all the ontology terms you have mapped to your columns. You can view term details or remove mappings.")
     
     header_col1, header_col2, header_col3, header_col4 = st.columns([2.5, 3, 2.5, 0.5])
     with header_col1:
@@ -73,7 +73,7 @@ def render_mapped_terms():
 # Display value-to-ontology mapping info
 def render_value_mappings():
     st.markdown('<div class="sub-heading">Unique Values\' Ontology Terms</div>', unsafe_allow_html=True)
-    st.caption("This table shows the ontology terms mapped to specific data values within your columns. Each row represents a value-to-term mapping that you have created.")
+    st.markdown("This table shows the ontology terms mapped to specific data values within your columns. Each row represents a value-to-term mapping that you have created.")
     
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([1.8, 1.5, 3, 2.5, 0.5])
     with header_col1:
@@ -161,7 +161,7 @@ def render_value_mappings():
 # Render the download buttons
 def render_download_buttons():
     st.write("### Step 7: Download Results")
-    st.caption("Export your mapping results in various formats for use in other applications or for record keeping.")
+    st.markdown("Export your mapping results in various formats for use in other applications or for record keeping.")
     
     col1, col2, col3 = st.columns(3)
     
@@ -297,7 +297,7 @@ def render_download_buttons():
             )
 
     # SSSOM / LinkML 홈페이지 링크 / SSSOM and LinkML homepage links
-    st.caption(
+    st.markdown(
         "Learn more about the standards used: "
         "[LinkML](https://linkml.io/) · "
         "[SSSOM](https://mapping-commons.github.io/sssom/)"

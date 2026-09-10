@@ -24,7 +24,7 @@ def _render_term_checklist(df, key_prefix, column):
     keep = [not is_column_term_mapped(column, u) for u in df["Ontology Term URI"]]
     df = df[keep].reset_index(drop=True)
     if len(df) == 0:
-        st.caption("Every matching term has been added. Remove one from the "
+        st.markdown("Every matching term has been added. Remove one from the "
                    "table below to add it again.")
         return
 
@@ -59,7 +59,7 @@ def _render_term_checklist(df, key_prefix, column):
 # Render column selection and ontology mapping section
 def render_column_mapping_section():
     st.write("### Step 5: Map Ontology Terms for Columns")
-    st.caption("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them to each other. Start by selecting a column name from the dropdown below.")
+    st.markdown("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them to each other. Start by selecting a column name from the dropdown below.")
 
     if st.session_state.uploaded_df is not None:
         columns = list(st.session_state.uploaded_df.columns)
@@ -125,7 +125,7 @@ def render_column_mapping_section():
                         and len(st.session_state.filtered_ontology_results) > 0)
 
             st.markdown('<div class="sub-heading">Select ontology terms</div>', unsafe_allow_html=True)
-            st.caption("Add ontology terms with the Add button, or click the ℹ️ icon to view a term's details. You can also search for more terms.")
+            st.markdown("Add ontology terms with the Add button, or click the ℹ️ icon to view a term's details. You can also search for more terms.")
 
             # Full-width list. Term details open in a modal popup (ℹ️) instead of
             # an always-on side panel, so the list can use the whole width.
@@ -138,7 +138,7 @@ def render_column_mapping_section():
                         selected_column,
                     )
             else:
-                st.caption("No automatic matches for this column name. Use the keyword search below.")
+                st.markdown("No automatic matches for this column name. Use the keyword search below.")
 
             # ========== Manual search section (always available) ==========
             with st.container(border=True):
@@ -175,4 +175,4 @@ def render_column_mapping_section():
                             st.write("Click Add next to any term from the search results:")
                             _render_term_checklist(manual_df, "col_manual", selected_column)
                     else:
-                        st.caption("All matching terms are already listed above.")
+                        st.markdown("All matching terms are already listed above.")

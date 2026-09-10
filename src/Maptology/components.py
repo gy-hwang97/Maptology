@@ -11,8 +11,8 @@ _LOGO_PATH = os.path.join(_REPO_ROOT, "maptology.png")
 
 # 로고와 제목을 컬럼으로 표시 / Display logo and title in columns
 def render_header():
-    # The logo fills its column, so halving the column's share of the row is
-    # what halves the logo - and it stays half whatever the screen width.
+    # The logo fills its column, so the column's share of the row is what
+    # sets the logo's size, at any screen width.
     col1, col2 = st.columns([2.25, 11.5])
     with col1:
         st.image(_LOGO_PATH, width=1000)
@@ -46,7 +46,7 @@ def _render_term_details(info):
         st.markdown(f"**Synonyms:** {', '.join(str(s) for s in synonyms)}")
     encoded_uri = urllib.parse.quote(info['term_uri'], safe='')
     detail_url = f"https://bioportal.bioontology.org/ontologies/{info['ontology_abbr']}?p=classes&conceptid={encoded_uri}"
-    st.caption(f"[Open this term on BioPortal ↗]({detail_url})")
+    st.markdown(f"[Open this term on BioPortal ↗]({detail_url})")
 
 
 @st.dialog("Term Preview")
@@ -67,4 +67,4 @@ def render_preview_panel(preview_key):
         if preview_key in st.session_state and st.session_state[preview_key]:
             _render_term_details(st.session_state[preview_key])
         else:
-            st.caption("Click ℹ️ next to a term to view its details.")
+            st.markdown("Click ℹ️ next to a term to view its details.")

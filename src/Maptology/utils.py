@@ -196,6 +196,26 @@ def add_css():
     [data-testid="stMarkdownContainer"] a {
         color: #0068c9 !important;
     }
+    /* The download list's info control is a popover; hide the chevron
+       Streamlit appends so it reads as the same plain icon button the term
+       lists use. */
+    [data-testid="stPopoverButton"] svg {
+        display: none !important;
+    }
+    /* Anything nested inside a caption stays black too. */
+    [data-testid="stCaptionContainer"] * {
+        color: #000000 !important;
+    }
+    /* st.table renders a real HTML table, so the body font and colour reach
+       it; let a wide one scroll rather than overflow the page. */
+    [data-testid="stTable"] {
+        overflow-x: auto;
+    }
+    [data-testid="stTable"] td,
+    [data-testid="stTable"] th {
+        font-size: 18px !important;
+        color: #000000 !important;
+    }
     .main .block-container {
         max-width: 95% !important;
         padding: 1rem;

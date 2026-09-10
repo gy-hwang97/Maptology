@@ -525,7 +525,7 @@ def render_import_section():
         return
 
     st.write("### Step 3: Import Existing Mappings (Optional)")
-    st.caption(
+    st.markdown(
         "If you previously exported a mapping file from Maptology (LinkML .yaml "
         "or SSSOM .tsv), you can re-load it here. Only mappings whose column - "
         "and, for value mappings, whose value - exist in the current data file "

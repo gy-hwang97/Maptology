@@ -321,7 +321,7 @@ def _download_ontologies_dialog():
     yet. Downloading lives here, in its own dialog, so the main page only ever
     deals with ontologies that are actually usable.
     """
-    st.caption("These ontologies are on BioPortal but not on this machine yet. "
+    st.markdown("These ontologies are on BioPortal but not on this machine yet. "
                "Most download in seconds; the largest take a few minutes. "
                "Downloaded ontologies appear under Available ontologies.")
 
@@ -351,10 +351,6 @@ def _download_ontologies_dialog():
         else:
             st.info("Every available ontology has already been downloaded.")
     else:
-        # Which row, if any, is showing its description. A dialog cannot be
-        # opened from inside this one, so the info button expands the details
-        # in place instead - the button itself matches Steps 5 and 6.
-        info_open = st.session_state.get("download_info_open")
         with st.container(height=380):
             for ont in candidates:
                 acronym = ont["acronym"]
@@ -362,13 +358,13 @@ def _download_ontologies_dialog():
                 with st.container(horizontal=True, vertical_alignment="center"):
                     clicked = st.button("Download", key="download_" + acronym)
                     st.markdown(acronym + " - " + ont["name"])
-                    if st.button("ℹ️", key="dlinfo_" + acronym,
-                                 help="View description", type="tertiary"):
-                        st.session_state.download_info_open = (
-                            None if info_open == acronym else acronym)
-                        st.rerun(scope="fragment")
-                if info_open == acronym:
-                    _render_ontology_details(ont)
+                    # A dialog cannot be opened from inside this one, so the
+                    # details pop up over the row. Nothing reruns, so it opens
+                    # at once; the chevron Streamlit adds to a popover is
+                    # hidden in CSS, leaving the same icon button the term
+                    # lists use.
+                    with st.popover("ℹ️", help="View description"):
+                        _render_ontology_details(ont)
                 if clicked:
                     with st.spinner("Downloading " + acronym + " from BioPortal..."):
                         ok, message = install_ontology(acronym)
@@ -423,7 +419,7 @@ def render_ontology_selection(available_ontologies):
                       "ontologies you have downloaded are shown below. If you "
                       "would like to download more, click on the \"Download "
                       "ontologies\" button below.")
-    st.caption(statement)
+    st.markdown(statement)
 
     # The Download button is offered until everything is downloaded. Rendered on
     # its own so it sits left-aligned at the start of the line.
@@ -435,7 +431,7 @@ def render_ontology_selection(available_ontologies):
     if n_downloaded > 0:
         st.markdown('<div class="sub-heading">Available ontologies</div>',
                     unsafe_allow_html=True)
-        st.caption("The following ontologies have been downloaded. Select any "
+        st.markdown("The following ontologies have been downloaded. Select any "
                    "that you wish to use when annotating your data.")
 
         # The filter sits directly under the heading and shows only while the
@@ -475,22 +471,22 @@ def render_ontology_selection(available_ontologies):
                                 and o["acronym"] not in selected
                                 and (q in o["acronym"].lower() or q in o["name"].lower())]
                 if already:
-                    st.caption(", ".join(already)
+                    st.markdown(", ".join(already)
                                + (" is" if len(already) == 1 else " are")
                                + " already selected - see Selected ontologies below.")
                 if downloadable:
                     shown = ", ".join(downloadable[:5])
                     if len(downloadable) > 5:
                         shown += " and %d more" % (len(downloadable) - 5)
-                    st.caption(shown
+                    st.markdown(shown
                                + (" is" if len(downloadable) == 1 else " are")
                                + " not on this machine yet - use \"Download "
                                  "ontologies\" to fetch "
                                + ("it." if len(downloadable) == 1 else "them."))
                 if not already and not downloadable:
-                    st.caption("No available ontology matches '" + filter_query + "'.")
+                    st.markdown("No available ontology matches '" + filter_query + "'.")
             else:
-                st.caption("Every downloaded ontology is already selected.")
+                st.markdown("Every downloaded ontology is already selected.")
         else:
             with st.container(height=350):
                 for ont in available:

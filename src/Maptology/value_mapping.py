@@ -29,7 +29,7 @@ def _render_value_checklist(df, key_prefix, column, value):
     keep = [not is_value_term_mapped(column, value, u) for u in df["Ontology Term URI"]]
     df = df[keep].reset_index(drop=True)
     if len(df) == 0:
-        st.caption("Every matching term has been added. Remove one from the "
+        st.markdown("Every matching term has been added. Remove one from the "
                    "table below to add it again.")
         return
 
@@ -64,7 +64,7 @@ def _render_value_checklist(df, key_prefix, column, value):
 # Render value mapping section
 def render_value_mapping_section():
     st.write("### Step 6: Map Ontology Terms for Values")
-    st.caption("Now you can map ontology term(s) to each data value. Start by selecting a value from the dropdown below.")
+    st.markdown("Now you can map ontology term(s) to each data value. Start by selecting a value from the dropdown below.")
     selected_col = st.session_state.selected_column
     df = st.session_state.uploaded_df
 
@@ -123,8 +123,8 @@ def render_value_mapping_section():
                     if matches:
                         value_options = matches
                     else:
-                        st.caption("No value matches '" + needle + "' - showing all values.")
-                st.caption("Showing " + str(len(value_options)) + " of "
+                        st.markdown("No value matches '" + needle + "' - showing all values.")
+                st.markdown("Showing " + str(len(value_options)) + " of "
                            + str(len(all_values)) + " unique values")
 
             if st.session_state.selected_unique_value is None or st.session_state.selected_unique_value not in value_options:
@@ -201,7 +201,7 @@ def render_value_mapping_section():
                                 st.session_state.selected_unique_value,
                             )
                     else:
-                        st.caption("All matching terms are already listed above.")
+                        st.markdown("All matching terms are already listed above.")
         else:
             st.info("No unique values found in this column.")
     else:
