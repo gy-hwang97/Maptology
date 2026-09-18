@@ -114,13 +114,6 @@ if uploaded_file:
     st.write("### Step 2: Preview Data")
     st.markdown("This table shows the first 20 lines of your data so you can verify that the data were parsed properly.")
 
-    # st.table prints floats with pandas' default four decimals (21.0000);
-    # %g trims each back to how it reads in the file (21, 1.62).
-    def _preview_number(v):
-        if isinstance(v, float) and pd.notna(v):
-            return format(v, "g")
-        return v
-
     # Apply styling if there's a highlighted column
     if 'highlighted_column' in st.session_state and st.session_state.highlighted_column in df.columns:
         highlighted_col = st.session_state.highlighted_column
@@ -130,14 +123,12 @@ if uploaded_file:
             df_styler[highlighted_col] = 'background-color: #90EE90;'
             return df_styler
 
-        styled_df = (df.head(20).style
-                     .apply(highlight_column, axis=None)
-                     .format(_preview_number))
-        st.table(styled_df)
+        styled_df = df.head(20).style.apply(highlight_column, axis=None)
+        st.dataframe(styled_df, width='stretch', hide_index=False)
 
         st.markdown("Column '" + highlighted_col + "' highlighted due to recent type change")
     else:
-        st.table(st.session_state.uploaded_df.head(20).style.format(_preview_number))
+        st.dataframe(st.session_state.uploaded_df.head(20), width='stretch', hide_index=False)
 
     # Load the ontology catalog up front (silently). It must be available BEFORE
     # the import step so an imported file can auto-select the ontologies it uses.
