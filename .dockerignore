@@ -11,7 +11,7 @@ __pycache__
 .ruff_cache
 .coverage
 htmlcov
-ontology_cache
+ontology_cache*
 tfidf_cache
 text2term
 .env

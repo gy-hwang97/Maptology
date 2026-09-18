@@ -11,9 +11,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "src/Maptology/main.py", \
-     "--server.address=0.0.0.0", \
-     "--server.port=8501"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

@@ -151,3 +151,23 @@ requests per second.
 
 If you would rather not download everything, you can stop the process and
 Maptology will use whatever it has already built.
+
+### Serving at the root or under a URL prefix
+
+When you start Maptology with Docker (`docker-run.sh` or `docker-run.bat`),
+`MAPTOLOGY_BASE_PATH` controls the URL path the app is served from. Leave it
+empty (or unset) to run at the web server root; set it to a path when Maptology
+should live under a prefix. If you put the container behind a reverse proxy,
+forward that prefix to the container rather than stripping it.
+
+```
+# Serve at the web server root (e.g. https://www.maptology.com)
+export MAPTOLOGY_BASE_PATH=""
+# Windows PowerShell
+$env:MAPTOLOGY_BASE_PATH = ""
+
+# Serve under a URL prefix (e.g. https://myserver.edu/maptology)
+export MAPTOLOGY_BASE_PATH=/maptology
+# Windows PowerShell
+$env:MAPTOLOGY_BASE_PATH = "/maptology"
+```

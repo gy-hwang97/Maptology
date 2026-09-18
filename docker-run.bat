@@ -6,6 +6,7 @@ setlocal EnableExtensions
 if not defined MAPTOLOGY_PORT set "MAPTOLOGY_PORT=8501"
 if not defined BIOPORTAL_APIKEY set "BIOPORTAL_APIKEY=<YOUR_API_KEY>"
 if not defined MAPTOLOGY_DOWNLOAD_ALL set "MAPTOLOGY_DOWNLOAD_ALL=yes"
+if not defined MAPTOLOGY_BASE_PATH set "MAPTOLOGY_BASE_PATH="
 
 set "IMAGE_NAME=maptology"
 set "CONTAINER_NAME=maptology"
@@ -51,6 +52,7 @@ docker run -d ^
   -p "%MAPTOLOGY_PORT%:8501" ^
   -e "BIOPORTAL_APIKEY=%BIOPORTAL_APIKEY%" ^
   -e "MAPTOLOGY_DOWNLOAD_ALL=%MAPTOLOGY_DOWNLOAD_ALL%" ^
+  -e "MAPTOLOGY_BASE_PATH=%MAPTOLOGY_BASE_PATH%" ^
   -v "%cd%\ontology_cache:/app/ontology_cache" ^
   -v "%cd%\tfidf_cache:/app/tfidf_cache" ^
   "%IMAGE_NAME%"
@@ -59,5 +61,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Maptology is running at http://localhost:%MAPTOLOGY_PORT%
+if "%MAPTOLOGY_BASE_PATH%"=="" (
+  echo Maptology is running at http://localhost:%MAPTOLOGY_PORT%
+) else (
+  echo Maptology is running at http://localhost:%MAPTOLOGY_PORT%%MAPTOLOGY_BASE_PATH%
+)
 endlocal

@@ -182,7 +182,9 @@ cython_debug/
 
 # Large local data & caches - never commit (multi-GB)
 ontology_cache/
+ontology_cache2/
 tfidf_cache/
+tfidf_cache2/
 text2term/
 
 # Local virtual environment

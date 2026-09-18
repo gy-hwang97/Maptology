@@ -5,6 +5,7 @@ set -euo pipefail
 HOST_PORT="${MAPTOLOGY_PORT:-8501}"
 BIOPORTAL_APIKEY="${BIOPORTAL_APIKEY:-<YOUR_API_KEY>}"
 MAPTOLOGY_DOWNLOAD_ALL="${MAPTOLOGY_DOWNLOAD_ALL:-yes}"
+MAPTOLOGY_BASE_PATH="${MAPTOLOGY_BASE_PATH:-}"
 
 IMAGE_NAME="maptology"
 CONTAINER_NAME="maptology"
@@ -45,8 +46,14 @@ docker run -d \
   -p "${HOST_PORT}:8501" \
   -e "BIOPORTAL_APIKEY=${BIOPORTAL_APIKEY}" \
   -e "MAPTOLOGY_DOWNLOAD_ALL=${MAPTOLOGY_DOWNLOAD_ALL}" \
+  -e "MAPTOLOGY_BASE_PATH=${MAPTOLOGY_BASE_PATH}" \
   -v "${SCRIPT_DIR}/ontology_cache:/app/ontology_cache" \
   -v "${SCRIPT_DIR}/tfidf_cache:/app/tfidf_cache" \
   "$IMAGE_NAME"
 
-echo "Maptology is running at http://localhost:${HOST_PORT}"
+APP_URL="http://localhost:${HOST_PORT}"
+if [[ -n "${MAPTOLOGY_BASE_PATH}" ]]; then
+  APP_URL="${APP_URL}/${MAPTOLOGY_BASE_PATH#/}"
+  APP_URL="${APP_URL%/}"
+fi
+echo "Maptology is running at ${APP_URL}"
