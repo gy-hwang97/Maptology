@@ -122,45 +122,47 @@ def add_css():
     st.markdown("""
     <style>
     /* 글로벌 폰트 설정 / Global font setting */
-    html, body, [class*="css"], .main, .stApp,
-    .main .block-container p,
-    .main .block-container span,
-    .main .block-container label,
-    .main .block-container div,
-    .main .block-container h1,
-    .main .block-container h2,
-    .main .block-container h3,
-    .main .block-container h4,
-    .main .block-container a,
-    .main .block-container li,
-    .main .block-container td,
-    .main .block-container th,
-    .main .block-container input,
-    .main .block-container button,
-    .main .block-container textarea,
+    html, body, [class*="css"], .stMain, .stApp,
+    .stMain p,
+    .stMain span,
+    .stMain label,
+    .stMain div,
+    .stMain h1,
+    .stMain h2,
+    .stMain h3,
+    .stMain h4,
+    .stMain a,
+    .stMain li,
+    .stMain td,
+    .stMain th,
+    .stMain input,
+    .stMain button,
+    .stMain textarea,
     [data-testid="stMarkdownContainer"],
     [data-testid="stCaptionContainer"] {
         font-family: 'Calibri', 'Arial', sans-serif !important;
     }
     /* Three sizes only, the logo aside: main headers (28px), subheadings
-       (22px, set on .sub-heading below) and everything else (18px). Captions,
-       widget labels, uploader hints and expander text used to sit at 15, 16 or
-       20px; they all join the body size so nothing reads as small print. */
-    .main .block-container h1,
-    .main .block-container h2,
-    .main .block-container h3 {
+       (22px, set on .sub-heading below) and everything else (20px). These
+       selectors say .stMain, not .main: Streamlit renamed that container, and
+       under the old name every rule here silently matched nothing, which left
+       body text and buttons at the browser default while the rules keyed to a
+       data-testid still applied - the mismatch the sizes were reported for. */
+    .stMain h1,
+    .stMain h2,
+    .stMain h3 {
         font-size: 28px !important;
     }
-    .main .block-container p,
-    .main .block-container span,
-    .main .block-container label,
-    .main .block-container div,
-    .main .block-container li,
-    .main .block-container td,
-    .main .block-container th,
-    .main .block-container button,
-    .main .block-container input,
-    .main .block-container textarea,
+    .stMain p,
+    .stMain span,
+    .stMain label,
+    .stMain div,
+    .stMain li,
+    .stMain td,
+    .stMain th,
+    .stMain button,
+    .stMain input,
+    .stMain textarea,
     [data-testid="stFileUploader"] label p,
     [data-testid="stFileUploader"] small,
     [data-testid="stFileUploader"] span,
@@ -170,30 +172,64 @@ def add_css():
     [data-testid="stTextInput"] label p,
     [data-testid="stTextInput"] input,
     [data-testid="stExpander"] p {
-        font-size: 18px !important;
+        font-size: 20px !important;
     }
     [data-testid="stFileUploader"] label p {
         font-weight: 500 !important;
     }
+    /* A dialog and a popover body render outside .stMain, so the same three
+       sizes and the same black text have to be stated for them as well. */
+    [data-testid="stDialog"] p,
+    [data-testid="stDialog"] span,
+    [data-testid="stDialog"] label,
+    [data-testid="stDialog"] div,
+    [data-testid="stDialog"] li,
+    [data-testid="stDialog"] td,
+    [data-testid="stDialog"] th,
+    [data-testid="stDialog"] button,
+    [data-testid="stDialog"] input,
+    [data-testid="stPopoverBody"] p,
+    [data-testid="stPopoverBody"] span,
+    [data-testid="stPopoverBody"] label,
+    [data-testid="stPopoverBody"] div,
+    [data-testid="stPopoverBody"] li {
+        font-size: 20px !important;
+    }
+    [data-testid="stDialog"] h1,
+    [data-testid="stDialog"] h2,
+    [data-testid="stDialog"] h3 {
+        font-size: 28px !important;
+    }
+    [data-testid="stDialog"] p,
+    [data-testid="stDialog"] span,
+    [data-testid="stDialog"] label,
+    [data-testid="stDialog"] li,
+    [data-testid="stDialog"] td,
+    [data-testid="stDialog"] th,
+    [data-testid="stPopoverBody"] p,
+    [data-testid="stPopoverBody"] span,
+    [data-testid="stPopoverBody"] li {
+        color: #000000 !important;
+    }
     /* Black text throughout - Streamlit greys out captions and help text -
        leaving only links blue. */
-    .main .block-container p,
-    .main .block-container span,
-    .main .block-container label,
-    .main .block-container li,
-    .main .block-container td,
-    .main .block-container th,
-    .main .block-container h1,
-    .main .block-container h2,
-    .main .block-container h3,
+    .stMain p,
+    .stMain span,
+    .stMain label,
+    .stMain li,
+    .stMain td,
+    .stMain th,
+    .stMain h1,
+    .stMain h2,
+    .stMain h3,
     [data-testid="stMarkdownContainer"],
     [data-testid="stCaptionContainer"],
     [data-testid="stCaptionContainer"] p,
     .stCaption p {
         color: #000000 !important;
     }
-    .main .block-container a,
-    .main .block-container a *,
+    .stMain a,
+    .stMain a *,
     [data-testid="stMarkdownContainer"] a,
     [data-testid="stMarkdownContainer"] a * {
         color: #0068c9 !important;
@@ -217,10 +253,10 @@ def add_css():
     }
     [data-testid="stTable"] td,
     [data-testid="stTable"] th {
-        font-size: 18px !important;
+        font-size: 20px !important;
         color: #000000 !important;
     }
-    .main .block-container {
+    .stMain {
         max-width: 95% !important;
         padding: 1rem;
     }
@@ -261,7 +297,7 @@ def add_css():
         display: inline-block;
         padding: 2px 6px;
         border-radius: 3px;
-        font-size: 18px;
+        font-size: 20px;
         margin-left: 8px;
         background-color: #f0f0f0;
         border: 1px solid #ddd;
@@ -333,8 +369,8 @@ def add_css():
     button[kind="tertiary"]:disabled *,
     [data-testid="stBaseButton-tertiary"]:disabled,
     [data-testid="stBaseButton-tertiary"]:disabled * {
-        color: var(--text-color, rgb(49, 51, 63)) !important;
-        -webkit-text-fill-color: var(--text-color, rgb(49, 51, 63)) !important;
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
         opacity: 1 !important;
         cursor: default !important;
     }
