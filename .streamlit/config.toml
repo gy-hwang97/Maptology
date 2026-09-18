@@ -3,3 +3,9 @@
 # huge wrong file fails fast instead of being read in full. (Streamlit's
 # default is 200 MB.)
 maxUploadSize = 20
+
+[theme]
+# The app's root font size. Streamlit sizes its own widgets in rem, so raising
+# this scales the parts CSS cannot reach - the data preview table above all -
+# along with everything else. Default is 16.
+baseFontSize = 20
