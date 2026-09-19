@@ -177,6 +177,27 @@ def add_css():
     [data-testid="stFileUploader"] label p {
         font-weight: 500 !important;
     }
+    /* The font-family rule above reaches every span, which includes Streamlit's
+       material icons - they are ligatures, so overriding their font printed the
+       icon's name as text ("add" beside an uploaded file). Give them their font
+       back. */
+    [data-testid="stIconMaterial"] {
+        font-family: 'Material Symbols Rounded' !important;
+    }
+    /* Only one file is accepted at a time, so the uploader's "add another"
+       button has nothing to do; hiding it also stops the file row from
+       overflowing into a horizontal scrollbar. */
+    [data-testid="stFileUploader"] button[aria-label="Add files"] {
+        display: none !important;
+    }
+    /* Let the uploaded file's name use the width the row now has, rather than
+       being clipped to a narrow chip. */
+    [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"],
+    [data-testid="stFileUploader"] ul,
+    [data-testid="stFileUploader"] li {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
     /* A dialog and a popover body render outside .stMain, so the same three
        sizes and the same black text have to be stated for them as well. */
     [data-testid="stDialog"] p,
@@ -255,6 +276,11 @@ def add_css():
     [data-testid="stTable"] th {
         font-size: 20px !important;
         color: #000000 !important;
+    }
+    /* Streamlit leaves a wide gap above the first element; with the toolbar
+       hidden there is nothing up there to make room for. */
+    [data-testid="stMainBlockContainer"] {
+        padding-top: 1rem !important;
     }
     .stMain {
         max-width: 95% !important;

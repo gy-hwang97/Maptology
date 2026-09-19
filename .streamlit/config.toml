@@ -9,3 +9,8 @@ maxUploadSize = 20
 # this scales the parts CSS cannot reach - the data preview table above all -
 # along with everything else. Default is 16.
 baseFontSize = 20
+
+[client]
+# Hide Streamlit's own toolbar (the three-dot menu and Deploy button). They
+# offer developer actions that do not belong in front of a user of the app.
+toolbarMode = "minimal"
