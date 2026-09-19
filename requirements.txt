@@ -2,6 +2,7 @@ streamlit>=1.52.0,<2
 pandas
 numpy
 openpyxl
+xlrd
 python-dateutil
 PyYAML
 scikit-learn
