@@ -49,6 +49,7 @@ if not exist "tfidf_cache" mkdir tfidf_cache
 echo Starting container '%CONTAINER_NAME%' on port %MAPTOLOGY_PORT%...
 docker run -d ^
   --name "%CONTAINER_NAME%" ^
+  --restart unless-stopped ^
   -p "%MAPTOLOGY_PORT%:8501" ^
   -e "BIOPORTAL_APIKEY=%BIOPORTAL_APIKEY%" ^
   -e "MAPTOLOGY_DOWNLOAD_ALL=%MAPTOLOGY_DOWNLOAD_ALL%" ^

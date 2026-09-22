@@ -43,6 +43,7 @@ mkdir -p ontology_cache tfidf_cache
 echo "Starting container '$CONTAINER_NAME' on port $HOST_PORT..."
 docker run -d \
   --name "$CONTAINER_NAME" \
+  --restart unless-stopped \
   -p "${HOST_PORT}:8501" \
   -e "BIOPORTAL_APIKEY=${BIOPORTAL_APIKEY}" \
   -e "MAPTOLOGY_DOWNLOAD_ALL=${MAPTOLOGY_DOWNLOAD_ALL}" \
