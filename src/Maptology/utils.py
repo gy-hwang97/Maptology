@@ -142,8 +142,9 @@ def add_css():
     [data-testid="stCaptionContainer"] {
         font-family: 'Calibri', 'Arial', sans-serif !important;
     }
-    /* Three sizes only, the logo aside: main headers (28px), subheadings
-       (22px, set on .sub-heading below) and everything else (20px). These
+    /* Main headers (28px on the h3, though the span inside shows at 20px),
+       subheadings (italic 20px, set on .sub-heading below) and everything
+       else (20px). These
        selectors say .stMain, not .main: Streamlit renamed that container, and
        under the old name every rule here silently matched nothing, which left
        body text and buttons at the browser default while the rules keyed to a
@@ -190,13 +191,32 @@ def add_css():
     [data-testid="stFileUploader"] button[aria-label="Add files"] {
         display: none !important;
     }
-    /* Let the uploaded file's name use the width the row now has, rather than
-       being clipped to a narrow chip. */
-    [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"],
-    [data-testid="stFileUploader"] ul,
-    [data-testid="stFileUploader"] li {
+    /* Show the uploaded file's full name. Streamlit shortens it in script
+       (start...end) before it reaches the page, so widening the chip is not
+       enough; the full name is only in the title attribute. The shortened
+       text is shrunk away and the title is shown in its place, wrapping
+       when it does not fit. */
+    .stMain [data-testid="stFileUploader"] [data-testid="stFileChips"],
+    .stMain [data-testid="stFileUploader"] [data-testid="stFileChip"],
+    .stMain [data-testid="stFileUploader"] [data-testid="stFileChip"] div {
         max-width: 100% !important;
-        width: 100% !important;
+        min-width: 0 !important;
+    }
+    .stMain [data-testid="stFileUploader"] [data-testid="stFileChip"] {
+        width: auto !important;
+        flex: 1 1 auto !important;
+    }
+    .stMain [data-testid="stFileUploader"] [data-testid="stFileChipName"] {
+        font-size: 0 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        width: auto !important;
+    }
+    .stMain [data-testid="stFileUploader"] [data-testid="stFileChipName"]::before {
+        content: attr(title);
+        font-size: 20px;
+        overflow-wrap: anywhere;
     }
     /* A dialog and a popover body render outside .stMain, so the same three
        sizes and the same black text have to be stated for them as well. */
@@ -262,6 +282,21 @@ def add_css():
     [data-testid="stPopoverButton"] [aria-hidden="true"],
     [data-testid="stPopoverButton"] svg {
         display: none !important;
+    }
+    /* An ontology row is a horizontal flex line. The name is sized to one
+       full line, so a long name drops onto the next row as a whole. Keep it
+       beside the button and wrap the rest of the text. */
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] {
+        flex-wrap: nowrap !important;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"]) {
+        min-width: 0 !important;
+        width: auto !important;
+        max-width: 100% !important;
+        flex: 0 1 auto !important;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] [data-testid="stMarkdownContainer"] p {
+        overflow-wrap: break-word;
     }
     /* Anything nested inside a caption stays black too. */
     [data-testid="stCaptionContainer"] * {
@@ -381,11 +416,54 @@ def add_css():
         border-left: 3px solid #4682B4; margin: 5px 0;
     }
     [data-testid="stForm"] { border: none !important; padding: 0 !important; }
-    .sub-heading {
-        font-size: 22px !important;
-        font-weight: bold !important;
+    /* Same size as the Step headings as they actually render: the 20px rule
+       above reaches the span inside each h3, so those show at 20px, not 28px. */
+    .stMain .sub-heading,
+    [data-testid="stDialog"] .sub-heading {
+        font-size: 20px !important;
+        font-weight: normal !important;
+        font-style: italic !important;
         margin-top: 10px;
-        margin-bottom: 5px;
+        margin-bottom: 14px;
+    }
+    /* Button labels live in a markdown container whose text is forced black,
+       which hides Streamlit's faded disabled color. Download, Previous, and
+       Next should read as unavailable when they cannot be used. */
+    [class*="st-key-download_"]:not(.st-key-download_dialog_done) button:disabled,
+    [class*="st-key-download_"]:not(.st-key-download_dialog_done) button:disabled [data-testid="stMarkdownContainer"],
+    [class*="st-key-download_"]:not(.st-key-download_dialog_done) button:disabled [data-testid="stMarkdownContainer"] * {
+        color: rgba(0, 0, 0, 0.4) !important;
+        -webkit-text-fill-color: rgba(0, 0, 0, 0.4) !important;
+    }
+    /* Done and the dialog's corner close button are redrawn by React as soon
+       as a widget is clicked, which strips a disabled flag set from script
+       before the browser paints. A class on the page is not part of that
+       redraw, so these two gray out on the same click as the Download buttons. */
+    body.maptology-download-busy .st-key-download_dialog_done button,
+    body.maptology-download-busy .st-key-download_dialog_done button [data-testid="stMarkdownContainer"],
+    body.maptology-download-busy .st-key-download_dialog_done button [data-testid="stMarkdownContainer"] * {
+        color: rgba(0, 0, 0, 0.4) !important;
+        -webkit-text-fill-color: rgba(0, 0, 0, 0.4) !important;
+        cursor: not-allowed !important;
+    }
+    body.maptology-download-busy .st-key-download_dialog_done button,
+    body.maptology-download-busy [data-testid="stDialog"] button[aria-label="Close"] {
+        pointer-events: none !important;
+        cursor: not-allowed !important;
+    }
+    body.maptology-download-busy [data-testid="stDialog"] button[aria-label="Close"] {
+        opacity: 0.4 !important;
+    }
+    /* Gray the other Download buttons while a fetch runs. Do not set
+       pointer-events here: this class is added on mouse-down, and blocking
+       the click would stop the download from ever starting. Previous and
+       Next are not part of this. */
+    body.maptology-download-busy [class*="st-key-download_"]:not([class*="st-key-download_page_"]):not([class*="st-key-download_dialog_"]) button,
+    body.maptology-download-busy [class*="st-key-download_"]:not([class*="st-key-download_page_"]):not([class*="st-key-download_dialog_"]) button [data-testid="stMarkdownContainer"],
+    body.maptology-download-busy [class*="st-key-download_"]:not([class*="st-key-download_page_"]):not([class*="st-key-download_dialog_"]) button [data-testid="stMarkdownContainer"] * {
+        color: rgba(0, 0, 0, 0.4) !important;
+        -webkit-text-fill-color: rgba(0, 0, 0, 0.4) !important;
+        cursor: not-allowed !important;
     }
     /* Ontology column values are rendered as DISABLED tertiary buttons (only to
        align them on the same row as the checkbox / ℹ️). Show their text in the

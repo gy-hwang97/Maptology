@@ -305,84 +305,528 @@ def _render_ontology_details(ont):
         st.write("  |  ".join(meta))
 
 
-@st.dialog("Ontology details")
-def _show_ontology_modal(ont):
-    """The same modal treatment the term lists in Steps 5 and 6 use."""
-    _render_ontology_details(ont)
-    if st.button("Close", key="close_ontology_modal"):
-        st.rerun()
+def _dialog_downloaded():
+    """Acronyms fetched in this dialog visit, so they leave the list at once."""
+    return st.session_state.setdefault("dialog_downloaded_acronyms", set())
 
 
-@st.dialog("Download ontologies", width="large")
+def _pending_downloads():
+    """Ontologies queued to fetch, in order, as (acronym, name) pairs."""
+    return st.session_state.setdefault("pending_ontology_downloads", [])
+
+
+def _queue_ontology_download(acronym, name):
+    """Queue one ontology. A second click does nothing until this one finishes."""
+    pending = _pending_downloads()
+    if pending:
+        return
+    pending.append((acronym, name))
+
+
+def _success_download_message(name, acronym):
+    shown = name.replace("\\", "\\\\").replace("*", "\\*").replace("_", "\\_")
+    return ("*" + shown + "* (" + acronym + ") was downloaded successfully. "
+            "It has been added to the list of available ontologies on the main page.")
+
+
+def _render_download_row(ont, queued=False, show_info=True, locked=False):
+    """One row in the download list: Download, name, and usually details.
+
+    Details are skipped while a download is in progress. A popover body is
+    built for every row, and that work was delaying the Downloading note.
+    `locked` disables this button while some other ontology is downloading.
+    """
+    acronym = ont["acronym"]
+    with st.container(horizontal=True, vertical_alignment="center",
+                      key="ont_name_dl_" + acronym):
+        st.button("Download", key="download_" + acronym,
+                  disabled=queued or locked,
+                  on_click=_queue_ontology_download,
+                  args=(acronym, ont["name"]))
+        st.markdown(acronym + " - " + ont["name"])
+        # A dialog cannot be opened from inside this one, so the details pop
+        # up over the row. Nothing reruns, so it opens at once; the chevron
+        # Streamlit adds to a popover is hidden in CSS.
+        if show_info:
+            with st.popover("ℹ️", type="tertiary"):
+                _render_ontology_details(ont)
+
+
+def _shift_download_page(delta):
+    """Move one page before Previous and Next are drawn.
+
+    A button's disabled flag is fixed when the button is created. Updating
+    the page after that click changes the list, but leaves the buttons grayed
+    for the page just left until something else redraws them.
+    """
+    st.session_state.download_list_page = (
+        st.session_state.get("download_list_page", 0) + delta)
+
+
+def _clear_download_dialog_state():
+    """Drop dialog-only state. The main page reads the catalog on its own."""
+    st.session_state.show_download_dialog = False
+    st.session_state.pop("pending_ontology_downloads", None)
+    st.session_state.pop("dialog_downloaded_acronyms", None)
+    st.session_state.pop("download_row_errors", None)
+    st.session_state.pop("download_list_page", None)
+    st.session_state.pop("download_list_filter", None)
+
+
+def _close_download_dialog():
+    """Close the download dialog without first redrawing its list.
+
+    A click inside a dialog reruns the dialog before the button's result is
+    visible, and that list is one row per ontology still to fetch. A callback
+    runs before the body, and st.rerun() stops there, so Done does not build
+    the list only to discard it. The full rerun is what closes the dialog and
+    shows anything just downloaded under Available ontologies.
+    """
+    _clear_download_dialog_state()
+    st.rerun()
+
+
+def _dismiss_download_dialog():
+    """The corner close button dismisses the dialog; refresh the main page."""
+    _clear_download_dialog_state()
+
+
+def _arm_single_download_lock():
+    """Lock the dialog's other actions in the browser as soon as Download is clicked.
+
+    The fetch runs in this dialog until BioPortal responds, so the page cannot
+    close it until then. Streamlit only disables Done once that run has
+    started, and the corner close button is not one of those widgets. This
+    turns both off at the click, and turns them back on when the Downloading
+    note leaves.
+    """
+    st.html(
+        """
+        <style>
+        [data-testid="stElementContainer"]:has(.maptology-download-lock) {
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        </style>
+        <div class="maptology-download-lock"></div>
+        <script>
+        (function () {
+            if (window.__maptologySingleDownloadV7) return;
+            window.__maptologySingleDownloadV7 = true;
+
+            function downloadLabel(button) {
+                return (button.textContent || "").replace(/\\s+/g, " ").trim();
+            }
+
+            function dialogOf(node) {
+                return node.closest('[data-testid="stDialog"]');
+            }
+
+            function lockOthers(clicked) {
+                var dialog = dialogOf(clicked);
+                if (!dialog) return;
+                var buttons = dialog.querySelectorAll("button");
+                for (var i = 0; i < buttons.length; i++) {
+                    var other = buttons[i];
+                    if (other === clicked) continue;
+                    if (downloadLabel(other) !== "Download") continue;
+                    other.disabled = true;
+                }
+            }
+
+            function stillDownloading(dialog, acr) {
+                var text = dialog.innerText || "";
+                if (!acr) return text.indexOf("Downloading ") !== -1;
+                return text.indexOf("Downloading " + acr + " from BioPortal") !== -1;
+            }
+
+            function successShown(dialog, acr) {
+                var alerts = dialog.querySelectorAll('[data-testid="stAlert"]');
+                for (var i = 0; i < alerts.length; i++) {
+                    var found = successAcronym(alerts[i].textContent || "");
+                    if (found && (!acr || found === acr)) return true;
+                }
+                return false;
+            }
+
+            function exceptionText() {
+                var nodes = document.querySelectorAll('[data-testid="stException"]');
+                var parts = [];
+                for (var i = 0; i < nodes.length; i++) parts.push(nodes[i].innerText || "");
+                return parts.join("\\n");
+            }
+
+            // The note under one row: "" if there is none, null if the row is
+            // not on screen. Any note other than Downloading or a success note
+            // is an error; the messages vary (missing API key, not in the
+            // catalogue, failed fetch), so the wording is not matched.
+            function rowNoteAlert(dialog, acr) {
+                if (!acr) return null;
+                var rows = dialog.querySelectorAll(ROW_SELECTOR);
+                for (var i = 0; i < rows.length; i++) {
+                    if (rowAcronym(rows[i]) !== acr) continue;
+                    var slot = ownWrapper(rows[i], dialog).nextElementSibling;
+                    return {alert: slot ? slot.querySelector('[data-testid="stAlert"]') : null};
+                }
+                return null;
+            }
+
+            function rowNote(dialog, acr) {
+                var found = rowNoteAlert(dialog, acr);
+                if (!found) return null;
+                return found.alert ? (found.alert.textContent || "").trim() : "";
+            }
+
+            function beginDownload(button) {
+                var dialog = dialogOf(button);
+                if (!dialog) return;
+                window.__maptologyDownloadBusy = true;
+                window.__maptologyDownloadSaw = false;
+                window.__maptologyDownloadScrolled = false;
+                var row = button.closest(ROW_SELECTOR);
+                window.__maptologyDownloadAcronym = row ? rowAcronym(row) : null;
+                window.__maptologySuccessGen = (window.__maptologySuccessGen || 0) + 1;
+                window.__maptologyExceptionAtStart = exceptionText();
+                window.__maptologyNoteAtStart = rowNote(dialog, window.__maptologyDownloadAcronym);
+                document.body.classList.add("maptology-download-busy");
+                lockOthers(button);
+            }
+
+            function enableDownloadButtons() {
+                if (window.__maptologyDownloadBusy) return;
+                var dialog = document.querySelector('[data-testid="stDialog"]');
+                if (!dialog) return;
+                var buttons = dialog.querySelectorAll("button");
+                for (var i = 0; i < buttons.length; i++) {
+                    if (downloadLabel(buttons[i]) !== "Download") continue;
+                    buttons[i].disabled = false;
+                }
+            }
+
+            function endDownload() {
+                window.__maptologyDownloadBusy = false;
+                window.__maptologyDownloadSaw = false;
+                document.body.classList.remove("maptology-download-busy");
+                enableDownloadButtons();
+                // The page may apply its own disabled flag as this run ends.
+                // Put the buttons back once that has settled.
+                setTimeout(enableDownloadButtons, 0);
+                setTimeout(enableDownloadButtons, 300);
+            }
+
+            // Acronyms whose success note has had its three seconds. The page
+            // reuses the same nodes for other rows when the list is redrawn,
+            // so what is hidden is decided by content, not by node.
+            window.__maptologyHiddenAcronyms = window.__maptologyHiddenAcronyms || {};
+
+            var SUCCESS_SUFFIX = ") was downloaded successfully";
+
+            function successAcronym(text) {
+                var end = text.indexOf(SUCCESS_SUFFIX);
+                if (end === -1) return null;
+                var start = text.lastIndexOf("(", end);
+                if (start === -1) return null;
+                return text.slice(start + 1, end);
+            }
+
+            var ROW_SELECTOR = '[data-testid="stHorizontalBlock"][class*="st-key-ont_name_dl_"]';
+
+            function rowAcronym(row) {
+                var texts = row.querySelectorAll('[data-testid="stMarkdownContainer"] p');
+                for (var i = 0; i < texts.length; i++) {
+                    var t = (texts[i].textContent || "").trim();
+                    var dash = t.indexOf(" - ");
+                    if (dash > 0) return t.slice(0, dash);
+                }
+                return null;
+            }
+
+            // The outermost wrapper that holds only this row or note, so its
+            // spacing goes too. Stops before any node that also holds others.
+            function ownWrapper(node, dialog) {
+                var n = node;
+                while (n.parentElement && n.parentElement !== dialog
+                        && n.parentElement.children.length === 1) {
+                    n = n.parentElement;
+                }
+                return n;
+            }
+
+            // Every row and success note in the dialog, with its acronym.
+            function hideTargets(dialog) {
+                var out = [];
+                var rows = dialog.querySelectorAll(ROW_SELECTOR);
+                for (var i = 0; i < rows.length; i++) {
+                    var acr = rowAcronym(rows[i]);
+                    if (acr) out.push([acr, ownWrapper(rows[i], dialog)]);
+                }
+                var alerts = dialog.querySelectorAll('[data-testid="stAlert"]');
+                for (var j = 0; j < alerts.length; j++) {
+                    var a = successAcronym(alerts[j].textContent || "");
+                    if (a) out.push([a, ownWrapper(alerts[j], dialog)]);
+                }
+                return out;
+            }
+
+            function applyHidden(dialog) {
+                var hidden = window.__maptologyHiddenAcronyms;
+                var keep = [];
+                var targets = hideTargets(dialog);
+                for (var i = 0; i < targets.length; i++) {
+                    if (hidden[targets[i][0]]) keep.push(targets[i][1]);
+                }
+                // A hidden node now showing a different row comes back.
+                var marked = dialog.querySelectorAll("[data-maptology-hidden]");
+                for (var j = 0; j < marked.length; j++) {
+                    if (keep.indexOf(marked[j]) !== -1) continue;
+                    marked[j].style.display = "";
+                    marked[j].removeAttribute("data-maptology-hidden");
+                }
+                for (var k = 0; k < keep.length; k++) {
+                    if (keep[k].hasAttribute("data-maptology-hidden")) continue;
+                    keep[k].style.display = "none";
+                    keep[k].setAttribute("data-maptology-hidden", "1");
+                }
+            }
+
+            function scheduleHideSuccess() {
+                var gen = ++window.__maptologySuccessGen;
+                setTimeout(function () {
+                    if (gen !== window.__maptologySuccessGen) return;
+                    var dialog = document.querySelector('[data-testid="stDialog"]');
+                    if (!dialog) return;
+                    var alerts = dialog.querySelectorAll('[data-testid="stAlert"]');
+                    for (var i = 0; i < alerts.length; i++) {
+                        var acr = successAcronym(alerts[i].textContent || "");
+                        if (acr) window.__maptologyHiddenAcronyms[acr] = true;
+                    }
+                    applyHidden(dialog);
+                }, 3000);
+            }
+
+            document.addEventListener("pointerdown", function (event) {
+                var el = event.target;
+                if (!el || !el.closest) return;
+                var button = el.closest("button");
+                if (!button || downloadLabel(button) !== "Download") return;
+                if (!dialogOf(button)) return;
+                beginDownload(button);
+            }, true);
+
+            document.addEventListener("click", function (event) {
+                var el = event.target;
+                if (!el || !el.closest) return;
+                var button = el.closest("button");
+                if (!button || downloadLabel(button) !== "Download") return;
+                if (!dialogOf(button)) return;
+                beginDownload(button);
+                setTimeout(function () { button.disabled = true; }, 0);
+            }, true);
+
+            document.addEventListener("keydown", function (event) {
+                if (!window.__maptologyDownloadBusy) return;
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                event.stopPropagation();
+            }, true);
+
+            new MutationObserver(function () {
+                var dialog = document.querySelector('[data-testid="stDialog"]');
+                if (!dialog) {
+                    window.__maptologyHiddenAcronyms = {};
+                    if (window.__maptologyDownloadBusy) endDownload();
+                    return;
+                }
+                applyHidden(dialog);
+                if (!window.__maptologyDownloadBusy) return;
+                var acr = window.__maptologyDownloadAcronym;
+                // An exception keeps the Downloading line on screen, because
+                // the traceback quotes that line. The error itself is what
+                // ends the lock. An error already visible before this click
+                // does not.
+                var failed = exceptionText() !== (window.__maptologyExceptionAtStart || "")
+                    && exceptionText() !== "";
+                if (failed) {
+                    endDownload();
+                    return;
+                }
+                // Read only the note under the clicked row. Errors under other
+                // rows come and go as the list is redrawn.
+                var note = rowNote(dialog, acr);
+                if (note !== null) {
+                    if (note.indexOf("Downloading ") === 0) {
+                        window.__maptologyDownloadSaw = true;
+                        // Once per download, so the list does not keep
+                        // jumping back if the user scrolls away from it.
+                        if (!window.__maptologyDownloadScrolled) {
+                            window.__maptologyDownloadScrolled = true;
+                            rowNoteAlert(dialog, acr).alert.scrollIntoView(
+                                {block: "nearest", behavior: "smooth"});
+                        }
+                        return;
+                    }
+                    if (successAcronym(note) === acr) {
+                        endDownload();
+                        scheduleHideSuccess();
+                        return;
+                    }
+                    // Any other note is an error. A retry of a row that already
+                    // showed an error must wait for the new run, not the old note.
+                    if (note && (window.__maptologyDownloadSaw
+                                 || note !== window.__maptologyNoteAtStart)) {
+                        endDownload();
+                    }
+                    return;
+                }
+                if (stillDownloading(dialog, acr)) {
+                    window.__maptologyDownloadSaw = true;
+                    return;
+                }
+                // The note can replace "Downloading" in one update, so this
+                // ontology's own success note is enough to release the
+                // buttons. An earlier ontology's note does not count.
+                var finished = successShown(dialog, acr);
+                if (finished || window.__maptologyDownloadSaw) {
+                    endDownload();
+                    if (finished) scheduleHideSuccess();
+                }
+            }).observe(document.body, {
+                childList: true,
+                subtree: true,
+                // The page can turn the Downloading note into the error or
+                // success note by changing only its text.
+                characterData: true,
+            });
+        })();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
+
+
+@st.dialog("Download ontologies", width="large",
+           on_dismiss=_dismiss_download_dialog)
 def _download_ontologies_dialog():
-    """Fetch ontologies from BioPortal, one click each.
+    """Fetch ontologies from BioPortal, one at a time.
 
     Lists everything the saved catalogue offers that is not on this machine
-    yet. Downloading lives here, in its own dialog, so the main page only ever
-    deals with ontologies that are actually usable.
+    yet. Downloading lives here, in its own dialog, so the main page only
+    ever deals with ontologies that are actually usable.
     """
+    _arm_single_download_lock()
     st.markdown("These ontologies are on BioPortal but not on this machine yet. "
                "Most download in seconds; the largest take a few minutes. "
                "Downloaded ontologies appear under Available ontologies.")
 
-    # A download on the previous fragment rerun left a confirmation to show.
-    success = st.session_state.pop("download_success_msg", None)
-    if success:
-        st.success(success)
-
     query = st.text_input("Search downloadable ontologies",
                           placeholder="Type to filter...",
                           key="download_dialog_filter")
+    already = _dialog_downloaded()
     candidates = [o for o in get_available_ontologies()
-                  if not o.get("downloaded", False)]
+                  if not o.get("downloaded", False)
+                  and o["acronym"] not in already]
     if query:
         q = query.lower()
         candidates = [o for o in candidates
                       if q in o["acronym"].lower() or q in o["name"].lower()]
 
-    if not candidates:
-        # After a download the confirmation above already explains the empty
-        # list, so the "nothing matches" note would only confuse. Otherwise say
-        # which case it is: an unmatched search, or everything downloaded.
-        if success:
-            pass
-        elif query:
+    pending = _pending_downloads()
+    pending_acronyms = {item[0] for item in pending}
+    # A failed fetch is shown under that row on the redraw, with the rest of
+    # the list still there.
+    row_errors = st.session_state.setdefault("download_row_errors", {})
+
+    # The full catalogue is hundreds of rows. Drawing every one makes each
+    # Download or Done click wait on that whole list, so only one page is built.
+    page_size = 25
+    prev_filter = st.session_state.get("download_list_filter", "")
+    if query != prev_filter:
+        st.session_state.download_list_filter = query
+        st.session_state.download_list_page = 0
+    page = st.session_state.get("download_list_page", 0)
+    page_count = max(1, (len(candidates) + page_size - 1) // page_size)
+    page = min(max(page, 0), page_count - 1)
+    st.session_state.download_list_page = page
+
+    if not candidates and not row_errors:
+        if query:
             st.info("No downloadable ontology matches '" + query + "'.")
         else:
             st.info("Every available ontology has already been downloaded.")
     else:
-        with st.container(height=380):
-            for ont in candidates:
-                acronym = ont["acronym"]
-                # Button next to the name, packed left (see the Available list).
-                with st.container(horizontal=True, vertical_alignment="center"):
-                    clicked = st.button("Download", key="download_" + acronym)
-                    st.markdown(acronym + " - " + ont["name"])
-                    # A dialog cannot be opened from inside this one, so the
-                    # details pop up over the row. Nothing reruns, so it opens
-                    # at once; the chevron Streamlit adds to a popover is
-                    # hidden in CSS, leaving the same icon button the term
-                    # lists use.
-                    with st.popover("ℹ️", help="View description",
-                                    type="tertiary"):
-                        _render_ontology_details(ont)
-                if clicked:
-                    with st.spinner("Downloading " + acronym + " from BioPortal..."):
-                        ok, message = install_ontology(acronym)
-                    if ok:
-                        # The catalog on disk changed; drop the caches so this
-                        # entry moves to Available, then redraw only the dialog
-                        # so several ontologies can be fetched in one visit.
-                        st.session_state.download_success_msg = (
-                            ont["name"] + " was downloaded successfully.")
-                        _load_ontology_catalog.clear()
-                        st.session_state.available_ontologies = []
-                        st.rerun(scope="fragment")
-                    else:
-                        st.error(message)
+        if len(candidates) > page_size:
+            prev_col, label_col, next_col = st.columns([1, 3, 1])
+            with prev_col:
+                st.button("Previous", key="download_page_prev",
+                          disabled=page == 0,
+                          on_click=_shift_download_page, args=(-1,))
+            with next_col:
+                # The list below is full width. Keep Next against that box's
+                # right edge instead of the left side of this column.
+                with st.container(horizontal=True, horizontal_alignment="right"):
+                    st.button("Next", key="download_page_next",
+                              disabled=page >= page_count - 1,
+                              on_click=_shift_download_page, args=(1,))
+            start = page * page_size
+            window = candidates[start:start + page_size]
+            with label_col:
+                st.markdown("%d–%d of %d" % (start + 1, start + len(window),
+                                            len(candidates)),
+                            text_alignment="center")
+        else:
+            window = candidates
 
-    if st.button("Done", key="download_dialog_done"):
-        st.rerun()  # full rerun closes the dialog and refreshes the lists
+        placeholders = {}
+        with st.container(height=380):
+            for ont in window:
+                acronym = ont["acronym"]
+                queued = acronym in pending_acronyms
+                # Keep every visible row in place. Skip descriptions during a
+                # fetch so the Downloading note is not stuck behind them.
+                # The button stays enabled in the page data. Graying it is
+                # done in the browser, and that has to be reversible when the
+                # fetch fails without rebuilding this list.
+                _render_download_row(ont, show_info=not pending)
+                slot = st.empty()
+                placeholders[acronym] = slot
+                if queued:
+                    slot.info("Downloading " + acronym + " from BioPortal. This may take a few minutes...")
+                elif acronym in row_errors:
+                    slot.error(row_errors.pop(acronym))
+
+        if pending:
+            for acronym, name in list(pending):
+                slot = placeholders.get(acronym)
+                try:
+                    ok, message = install_ontology(acronym)
+                except Exception as e:
+                    ok = False
+                    message = ("%s could not be downloaded (%s)."
+                               % (acronym, type(e).__name__))
+                pending[:] = [item for item in pending if item[0] != acronym]
+                if ok:
+                    already.add(acronym)
+                    _load_ontology_catalog.clear()
+                    st.session_state.available_ontologies = []
+                    # Same spot as the Downloading note. The browser removes
+                    # this note, and the row with it, after three seconds.
+                    # Rebuilding the list from the server is what was flashing
+                    # the dialog twice.
+                    if slot is not None:
+                        slot.success(_success_download_message(name, acronym))
+                else:
+                    row_errors[acronym] = message
+                    # Same spot as the Downloading note. Replacing it releases
+                    # Download, Done, and the corner close button. A rerun
+                    # here would rebuild the list and leave those locked.
+                    if slot is not None:
+                        slot.error(message)
+
+    st.button("Done", key="download_dialog_done",
+              on_click=_close_download_dialog)
 
 
 # Render ontology selection. A statement explains what to do; while nothing is
@@ -426,12 +870,16 @@ def render_ontology_selection(available_ontologies):
     # its own so it sits left-aligned at the start of the line.
     if not all_downloaded:
         if st.button("Download ontologies", key="open_download_dialog"):
+            st.session_state.show_download_dialog = True
+        # Reopened after a download finishes, so the list behind the dialog
+        # already includes the ontology that was just fetched.
+        if st.session_state.get("show_download_dialog"):
             _download_ontologies_dialog()
 
     # Available ontologies stay hidden until at least one has been downloaded.
     if n_downloaded > 0:
-        st.markdown('<div class="sub-heading">Available ontologies</div>',
-                    unsafe_allow_html=True)
+        # st.markdown('<div class="sub-heading">Available ontologies</div>',
+        #             unsafe_allow_html=True)
         st.markdown("The following ontologies have been downloaded. Select any "
                    "that you wish to use when annotating your data.")
 
@@ -497,14 +945,17 @@ def render_ontology_selection(available_ontologies):
                         label += "  (update available)"
                     # Button next to the name, packed left, so a wide screen
                     # leaves the empty space on the right, not between them.
-                    with st.container(horizontal=True, vertical_alignment="center"):
+                    with st.container(horizontal=True, vertical_alignment="center",
+                                      key="ont_name_av_" + acronym):
                         clicked = st.button("Select", key="add_" + acronym,
                                             disabled=at_limit)
                         st.markdown(label)
-                        # Same info button as the term lists in Steps 5 and 6.
-                        if st.button("ℹ️", key="info_" + acronym,
-                                     help="View description", type="tertiary"):
-                            _show_ontology_modal(ont)
+                        # A button that opens a dialog reruns the whole script,
+                        # and with a long list that rerun is slow. A popover
+                        # opens without a rerun. CSS hides its chevron so it
+                        # still reads as the same icon button.
+                        with st.popover("ℹ️", type="tertiary"):
+                            _render_ontology_details(ont)
                     if clicked:
                         # An ontology whose BioPortal submission has moved on is
                         # refreshed at the moment it is chosen for use.
@@ -531,7 +982,8 @@ def render_ontology_selection(available_ontologies):
         names = {o["acronym"]: o["name"] for o in available_ontologies}
         for acronym in list(selected):
             # Remove on the left, next to the name, matching the Available list.
-            with st.container(horizontal=True, vertical_alignment="center"):
+            with st.container(horizontal=True, vertical_alignment="center",
+                              key="ont_name_sel_" + acronym):
                 clicked = st.button("Remove", key="remove_" + acronym)
                 st.markdown(acronym + " - " + names.get(acronym, acronym))
             if clicked:
