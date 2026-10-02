@@ -7,6 +7,9 @@ import urllib.parse
 # the app is launched from.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _LOGO_PATH = os.path.join(_REPO_ROOT, "maptology.png")
+# The logo's map mark without the wordmark, with heavier lines so it still
+# reads at browser-tab size.
+FAVICON_PATH = os.path.join(_REPO_ROOT, "favicon.png")
 
 
 # 로고와 제목을 컬럼으로 표시 / Display logo and title in columns
