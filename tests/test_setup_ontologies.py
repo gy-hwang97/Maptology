@@ -158,7 +158,7 @@ def test_an_ontology_we_never_recorded_is_downloaded(monkeypatch, tmp_path):
     assert setup.needs_download(_catalogue()[1], {}) is True
 
 
-def _run_recording_downloads(monkeypatch, tmp_path, local):
+def _run_recording_downloads(monkeypatch, tmp_path, local, only=None):
     """Run the real pipeline against stubs, returning what it downloaded."""
     downloaded = []
     saved = {}
@@ -183,7 +183,7 @@ def _run_recording_downloads(monkeypatch, tmp_path, local):
         return 0.1
 
     monkeypatch.setattr(setup, "download_one", fake_download)
-    setup.run("key")
+    setup.run("key", only=only)
     return downloaded, saved
 
 
@@ -214,6 +214,20 @@ def test_run_leaves_up_to_date_ontologies_alone(monkeypatch, tmp_path):
     downloaded, _ = _run_recording_downloads(monkeypatch, tmp_path, local)
 
     assert downloaded == []
+
+
+def test_run_success_forgets_an_earlier_failure(monkeypatch, tmp_path):
+    """Retried on purpose (--only) and readable this time: the failure record
+    has to go, or every later plain run keeps skipping an ontology that works."""
+    (tmp_path / "AAA.owl").write_bytes(b"current")
+    local = {"AAA": {"submissionId": 5}}
+    monkeypatch.setattr(setup, "FAILURES_FILE", str(tmp_path / "build_failures.json"))
+    setup.save_failures({"BBB": 9})
+
+    downloaded, _ = _run_recording_downloads(monkeypatch, tmp_path, local, only=["BBB"])
+
+    assert downloaded == ["BBB"]
+    assert setup.load_failures() == {}
 
 
 def test_requests_are_spaced_out_across_download_threads(monkeypatch):
@@ -471,6 +485,19 @@ def test_setup_one_failure_records_nothing_current(monkeypatch, tmp_path):
     assert "AAA" not in store
     # The unreadable submission is remembered so it is not retried forever.
     assert setup.load_failures().get("AAA") == 5
+
+
+def test_setup_one_success_forgets_an_earlier_failure(monkeypatch, tmp_path):
+    """GSSO was recorded as unreadable at submission 75, then read fine once
+    BioPortal's RDF rendering was fetched instead (#45). A record that outlives
+    the success keeps the batch run skipping an ontology that now works."""
+    downloads, indexes = [], []
+    _patch_setup_one(monkeypatch, tmp_path, downloads, indexes)
+    setup.save_failures({"AAA": 5, "BBB": 9})
+
+    setup.setup_one(_catalogue()[0], "key")
+
+    assert setup.load_failures() == {"BBB": 9}
 
 
 # ---------------------------------------------------------------------------

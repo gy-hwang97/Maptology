@@ -158,6 +158,18 @@ def load_failures():
         return {}
 
 
+def _forget_failure(failures, acronym):
+    """Drop a failure record once the ontology has been read after all.
+
+    The record keeps plan() from retrying a submission proven unreadable; left
+    in place after a later success (GSSO, once BioPortal's RDF rendering was
+    fetched instead, #45) it keeps every later run skipping an ontology that
+    works.
+    """
+    if failures.pop(acronym, None) is not None:
+        save_failures(failures)
+
+
 def save_failures(failures):
     os.makedirs(OWL_DIR, exist_ok=True)
     tmp = FAILURES_FILE + ".tmp"
@@ -470,12 +482,26 @@ def setup_one(ont, api_key):
         failures[acronym] = ont.get("submissionId")
         save_failures(failures)
         raise
+    _forget_failure(failures, acronym)
     local[acronym] = {"submissionId": ont.get("submissionId"),
                       "version": ont.get("version"),
                       "released": ont.get("released")}
     versions.save_local_versions(local)
     write_catalogue_tsv([ont])
     return n
+
+
+# OWL comes in several serialisations. owlready2 and rdflib read RDF/XML,
+# OWL/XML, Turtle and N-Triples; neither reads the functional syntax or the
+# Manchester syntax, which both open with one of these words.
+_UNREADABLE_OWL_STARTS = (b"Prefix(", b"Ontology(", b"Prefix:", b"Ontology:")
+
+
+def _unreadable_owl_syntax(path):
+    """Whether the file is OWL in a text syntax no parser here can read."""
+    with open(path, "rb") as fh:
+        head = fh.read(512)
+    return head.lstrip(b"\xef\xbb\xbf").lstrip().startswith(_UNREADABLE_OWL_STARTS)
 
 
 def download_one(ont, api_key):
@@ -488,39 +514,26 @@ def download_one(ont, api_key):
     finished. That is how PR, GAZ and CHEBI came to sit on disk at 1.0007 GiB
     each, ending in the middle of an XML element - BioPortal cuts its RDF
     conversion off there, and nothing here noticed.
+
+    An OWL submission is served as it was uploaded, and nineteen of them
+    (ADHER_INTCARE_EN, IDO, GSSO, FTC, ...) were uploaded in OWL functional or
+    Manchester syntax, which no parser here reads (#45). BioPortal also keeps
+    its own RDF/XML rendering of every submission it parsed, so such a file is
+    fetched a second time as that rendering, and the catalogue row records
+    RDF/XML as what is on disk.
     """
     acronym = ont["acronym"]
     dest = owl_path(acronym)
     tmp = dest + ".part"
     url = API_BASE + "/ontologies/" + acronym + "/download"
-    params = {} if ont.get("native_format") == "OWL" else {"download_format": "rdf"}
     headers = {"Authorization": "apikey token=" + api_key}
-
-    _rate_limit()
-    resp = requests.get(url, headers=headers, params=params, timeout=300, stream=True)
-    if resp.status_code != 200:
-        raise RuntimeError("HTTP %d" % resp.status_code)
+    as_rdf = ont.get("native_format") != "OWL"
     os.makedirs(OWL_DIR, exist_ok=True)
-    written = 0
     try:
-        with open(tmp, "wb") as fh:
-            for chunk in resp.iter_content(chunk_size=1 << 16):
-                fh.write(chunk)
-                written += len(chunk)
-
-        # Content-Length describes the bytes on the wire. When the response is
-        # compressed those are not the bytes we just wrote, so there is nothing
-        # to compare; the same goes for chunked responses, which send no length.
-        promised = resp.headers.get("Content-Length")
-        if promised is not None and not resp.headers.get("Content-Encoding"):
-            try:
-                promised = int(promised)
-            except (TypeError, ValueError):
-                promised = None
-            if promised is not None and written != promised:
-                raise RuntimeError(
-                    "incomplete download: got %d bytes, server said %d"
-                    % (written, promised))
+        _fetch(url, headers, as_rdf, tmp)
+        if not as_rdf and _unreadable_owl_syntax(tmp):
+            _fetch(url, headers, True, tmp)
+            ont["download_format"] = "RDF/XML"
     except BaseException:
         # Leave no half-written file behind, and leave any working copy alone.
         try:
@@ -531,6 +544,34 @@ def download_one(ont, api_key):
 
     os.replace(tmp, dest)
     return os.path.getsize(dest) / 1e6
+
+
+def _fetch(url, headers, as_rdf, tmp):
+    """One download into tmp, rejected when shorter than the server promised."""
+    params = {"download_format": "rdf"} if as_rdf else {}
+    _rate_limit()
+    resp = requests.get(url, headers=headers, params=params, timeout=300, stream=True)
+    if resp.status_code != 200:
+        raise RuntimeError("HTTP %d" % resp.status_code)
+    written = 0
+    with open(tmp, "wb") as fh:
+        for chunk in resp.iter_content(chunk_size=1 << 16):
+            fh.write(chunk)
+            written += len(chunk)
+
+    # Content-Length describes the bytes on the wire. When the response is
+    # compressed those are not the bytes we just wrote, so there is nothing
+    # to compare; the same goes for chunked responses, which send no length.
+    promised = resp.headers.get("Content-Length")
+    if promised is not None and not resp.headers.get("Content-Encoding"):
+        try:
+            promised = int(promised)
+        except (TypeError, ValueError):
+            promised = None
+        if promised is not None and written != promised:
+            raise RuntimeError(
+                "incomplete download: got %d bytes, server said %d"
+                % (written, promised))
 
 
 def _existing_rows():
@@ -661,6 +702,7 @@ def run(api_key, only=None, limit=0, check_only=False):
                 n = _timed_index(acronym)
             with lock:
                 counter["n"] += 1
+                _forget_failure(failures, acronym)
                 local[acronym] = {"submissionId": ont.get("submissionId"),
                                   "version": ont.get("version"),
                                   "released": ont.get("released")}
