@@ -4,6 +4,7 @@ from tfidf_search import get_ontology_list_from_tsv, search_local
 from ontology_setup import (catalogue_entries, recorded_submissions,
                             install_ontology,
                             _download_all_requested as download_all_requested)
+from utils import live_query, live_text_input
 
 
 # Load the ontology catalog once per server process.
@@ -717,13 +718,12 @@ def _download_ontologies_dialog():
     ever deals with ontologies that are actually usable.
     """
     _arm_single_download_lock()
-    st.markdown("These ontologies are on BioPortal but not on this machine yet. "
-               "Most download in seconds; the largest take a few minutes. "
-               "Downloaded ontologies appear under Available ontologies.")
+    st.markdown("These ontologies are on BioPortal but have not been downloaded to this machine yet. "
+               "Most download in seconds; the largest may take a few minutes.")
 
-    query = st.text_input("Search downloadable ontologies",
-                          placeholder="Type to filter...",
-                          key="download_dialog_filter")
+    query = live_query(live_text_input("Search downloadable ontologies",
+                                       placeholder="Type to filter...",
+                                       key="download_dialog_filter"))
     already = _dialog_downloaded()
     candidates = [o for o in get_available_ontologies()
                   if not o.get("downloaded", False)
@@ -829,6 +829,85 @@ def _download_ontologies_dialog():
               on_click=_close_download_dialog)
 
 
+@st.fragment
+def _render_available_ontologies(available_ontologies):
+    """List downloaded ontologies, filtered in the browser as the user types.
+
+    The box does not submit on each character. Sending the query back to the
+    server redraws every row, and that redraw was slow enough that the list
+    only appeared to change after a few characters.
+    """
+    selected = st.session_state.selected_ontologies
+    st.text_input(
+        "Filter ontologies",
+        placeholder="Type to filter available ontologies...",
+        label_visibility="collapsed",
+        key="ontology_filter")
+    # The browser filter watches for this marker after a successful Select.
+    # It focuses the box above only when that box already has text.
+    token = st.session_state.pop("focus_ontology_filter", None)
+    if token:
+        st.html(
+            '<div class="maptology-ont-filter-focus" data-token="%d" hidden></div>'
+            % int(token),
+            unsafe_allow_javascript=True)
+
+    available = [o for o in available_ontologies
+                 if o.get("downloaded", False) and o["acronym"] not in selected]
+
+    at_limit = len(selected) >= MAX_SELECTED_ONTOLOGIES
+    if at_limit:
+        st.warning("Maximum of " + str(MAX_SELECTED_ONTOLOGIES) + " ontologies "
+                   "selected. Remove one to add another.")
+
+    if not available:
+        st.markdown("Every downloaded ontology is already selected.")
+    else:
+        with st.container(height=350):
+            # Inside the list, so a filter that matches nothing is noticed
+            # there instead of under the box. The browser shows it.
+            st.markdown(
+                '<p class="maptology-ont-filter-empty"></p>',
+                unsafe_allow_html=True)
+            for ont in available:
+                acronym = ont["acronym"]
+                label = acronym + " - " + ont["name"]
+                if ont.get("update_available"):
+                    label += "  (update available)"
+                # Button next to the name, packed left, so a wide screen
+                # leaves the empty space on the right, not between them.
+                with st.container(horizontal=True, vertical_alignment="center",
+                                  key="ont_name_av_" + acronym):
+                    clicked = st.button("Select", key="add_" + acronym,
+                                        disabled=at_limit)
+                    st.markdown(label)
+                    # A button that opens a dialog reruns the whole script,
+                    # and with a long list that rerun is slow. A popover
+                    # opens without a rerun. CSS hides its chevron so it
+                    # still reads as the same icon button.
+                    with st.popover("ℹ️", type="tertiary"):
+                        _render_ontology_details(ont)
+                if clicked:
+                    # An ontology whose BioPortal submission has moved on is
+                    # refreshed at the moment it is chosen for use.
+                    if ont.get("update_available"):
+                        with st.spinner("Updating " + acronym + " from "
+                                        "BioPortal... large ontologies can "
+                                        "take a few minutes."):
+                            ok, message = install_ontology(acronym)
+                        if not ok:
+                            st.session_state.ontology_install_error = message
+                            st.rerun()
+                        _load_ontology_catalog.clear()
+                        st.session_state.available_ontologies = []
+                    st.session_state.selected_ontologies.append(acronym)
+                    st.session_state.ontologies_changed = True
+                    seq = st.session_state.get("ontology_filter_focus_seq", 0) + 1
+                    st.session_state.ontology_filter_focus_seq = seq
+                    st.session_state.focus_ontology_filter = seq
+                    st.rerun()
+
+
 # Render ontology selection. A statement explains what to do; while nothing is
 # downloaded, the Available section is hidden and only the Download dialog is
 # offered. Once ontologies are on disk they appear under Available, each with a
@@ -882,97 +961,7 @@ def render_ontology_selection(available_ontologies):
         #             unsafe_allow_html=True)
         st.markdown("The following ontologies have been downloaded. Select any "
                    "that you wish to use when annotating your data.")
-
-        # The filter sits directly under the heading and shows only while the
-        # list does. Its label is hidden - the placeholder already says what it
-        # is for. The key is versioned so Select can hand back an empty box: the
-        # chosen ontology was usually the query's only match, and a stale query
-        # would otherwise greet the user with an empty list.
-        filter_seq = st.session_state.get("ontology_filter_seq", 0)
-        filter_query = st.text_input(
-            "Filter ontologies",
-            placeholder="Type to filter available ontologies...",
-            label_visibility="collapsed",
-            key="ontology_filter_" + str(filter_seq))
-
-        available = [o for o in available_ontologies
-                     if o.get("downloaded", False) and o["acronym"] not in selected]
-        if filter_query:
-            q = filter_query.lower()
-            available = [o for o in available
-                         if q in o["acronym"].lower() or q in o["name"].lower()]
-
-        at_limit = len(selected) >= MAX_SELECTED_ONTOLOGIES
-        if at_limit:
-            st.warning("Maximum of " + str(MAX_SELECTED_ONTOLOGIES) + " ontologies "
-                       "selected. Remove one to add another.")
-
-        if not available:
-            if filter_query:
-                # An empty result usually has a reason the user can act on: the
-                # match is already selected, or it exists but is not downloaded.
-                q = filter_query.lower()
-                already = [o["acronym"] for o in available_ontologies
-                           if o["acronym"] in selected
-                           and (q in o["acronym"].lower() or q in o["name"].lower())]
-                downloadable = [o["acronym"] for o in available_ontologies
-                                if not o.get("downloaded", False)
-                                and o["acronym"] not in selected
-                                and (q in o["acronym"].lower() or q in o["name"].lower())]
-                if already:
-                    st.markdown(", ".join(already)
-                               + (" is" if len(already) == 1 else " are")
-                               + " already selected - see Selected ontologies below.")
-                if downloadable:
-                    shown = ", ".join(downloadable[:5])
-                    if len(downloadable) > 5:
-                        shown += " and %d more" % (len(downloadable) - 5)
-                    st.markdown(shown
-                               + (" is" if len(downloadable) == 1 else " are")
-                               + " not on this machine yet - use \"Download "
-                                 "ontologies\" to fetch "
-                               + ("it." if len(downloadable) == 1 else "them."))
-                if not already and not downloadable:
-                    st.markdown("No available ontology matches '" + filter_query + "'.")
-            else:
-                st.markdown("Every downloaded ontology is already selected.")
-        else:
-            with st.container(height=350):
-                for ont in available:
-                    acronym = ont["acronym"]
-                    label = acronym + " - " + ont["name"]
-                    if ont.get("update_available"):
-                        label += "  (update available)"
-                    # Button next to the name, packed left, so a wide screen
-                    # leaves the empty space on the right, not between them.
-                    with st.container(horizontal=True, vertical_alignment="center",
-                                      key="ont_name_av_" + acronym):
-                        clicked = st.button("Select", key="add_" + acronym,
-                                            disabled=at_limit)
-                        st.markdown(label)
-                        # A button that opens a dialog reruns the whole script,
-                        # and with a long list that rerun is slow. A popover
-                        # opens without a rerun. CSS hides its chevron so it
-                        # still reads as the same icon button.
-                        with st.popover("ℹ️", type="tertiary"):
-                            _render_ontology_details(ont)
-                    if clicked:
-                        # An ontology whose BioPortal submission has moved on is
-                        # refreshed at the moment it is chosen for use.
-                        if ont.get("update_available"):
-                            with st.spinner("Updating " + acronym + " from "
-                                            "BioPortal... large ontologies can "
-                                            "take a few minutes."):
-                                ok, message = install_ontology(acronym)
-                            if not ok:
-                                st.session_state.ontology_install_error = message
-                                st.rerun()
-                            _load_ontology_catalog.clear()
-                            st.session_state.available_ontologies = []
-                        st.session_state.ontology_filter_seq = filter_seq + 1
-                        st.session_state.selected_ontologies.append(acronym)
-                        st.session_state.ontologies_changed = True
-                        st.rerun()
+        _render_available_ontologies(available_ontologies)
 
     # Selected ontologies appear only once at least one has been chosen.
     if selected:
@@ -997,6 +986,8 @@ def render_ontology_selection(available_ontologies):
     if st.session_state.ontologies_changed:
         st.session_state.manual_column_search_results = None
         st.session_state.manual_value_search_results = None
+        st.session_state.manual_column_search_query = ""
+        st.session_state.manual_value_search_query = ""
 
     # Automatically execute search if ontology changed and column is selected
     if st.session_state.ontologies_changed and st.session_state.selected_column and st.session_state.selected_ontologies:

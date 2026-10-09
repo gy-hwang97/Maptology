@@ -198,6 +198,8 @@ def on_column_select():
     st.session_state.auto_searched = False
     st.session_state.manual_column_search_results = None
     st.session_state.manual_value_search_results = None
+    st.session_state.manual_column_search_query = ""
+    st.session_state.manual_value_search_query = ""
 
     if selected_column and st.session_state.selected_ontologies:
         from ontology import search_ontology, search_ontology_for_value

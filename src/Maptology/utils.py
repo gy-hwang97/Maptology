@@ -1,3 +1,5 @@
+import inspect
+
 import streamlit as st
 import pandas as pd
 import re
@@ -175,6 +177,14 @@ def add_css():
     [data-testid="stExpander"] p {
         font-size: 20px !important;
     }
+    /* Repeated column names are inline code so they read as monospaced.
+       The app font rule would otherwise paint them in Calibri, and Streamlit
+       draws code smaller than the alert text around it. */
+    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace !important;
+        font-size: 20px !important;
+        font-weight: 400 !important;
+    }
     [data-testid="stFileUploader"] label p {
         font-weight: 500 !important;
     }
@@ -298,6 +308,13 @@ def add_css():
     [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] [data-testid="stMarkdownContainer"] p {
         overflow-wrap: break-word;
     }
+    /* The row gap is 1rem. Pull only the info control halfway back toward
+       the name, and leave the gap before the name as it is. */
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stLayoutWrapper"]:has([data-testid="stPopover"]),
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stElementContainer"]:has([data-testid="stPopover"]),
+    [class*="st-key-info_"] {
+        margin-left: -0.5rem !important;
+    }
     /* Anything nested inside a caption stays black too. */
     [data-testid="stCaptionContainer"] * {
         color: #000000 !important;
@@ -311,6 +328,12 @@ def add_css():
     [data-testid="stTable"] th {
         font-size: 20px !important;
         color: #000000 !important;
+    }
+    /* The data preview's hover toolbar (columns, download, search, fullscreen)
+       pops up over the table and covers the header. The preview is the only
+       dataframe, so this does not affect other widgets. */
+    [data-testid="stDataFrame"] [data-testid="stElementToolbar"] {
+        display: none !important;
     }
     /* Streamlit leaves a wide gap above the first element; with the toolbar
        hidden there is nothing up there to make room for. */
@@ -428,10 +451,18 @@ def add_css():
     }
     /* Button labels live in a markdown container whose text is forced black,
        which hides Streamlit's faded disabled color. Download, Previous, and
-       Next should read as unavailable when they cannot be used. */
+       Next should read as unavailable when they cannot be used. The preview
+       pagers use the same treatment: Previous is faded on the first page and
+       Next is faded on the last page. */
     [class*="st-key-download_"]:not(.st-key-download_dialog_done) button:disabled,
     [class*="st-key-download_"]:not(.st-key-download_dialog_done) button:disabled [data-testid="stMarkdownContainer"],
-    [class*="st-key-download_"]:not(.st-key-download_dialog_done) button:disabled [data-testid="stMarkdownContainer"] * {
+    [class*="st-key-download_"]:not(.st-key-download_dialog_done) button:disabled [data-testid="stMarkdownContainer"] *,
+    [class*="st-key-preview_row_"] button:disabled,
+    [class*="st-key-preview_row_"] button:disabled [data-testid="stMarkdownContainer"],
+    [class*="st-key-preview_row_"] button:disabled [data-testid="stMarkdownContainer"] *,
+    [class*="st-key-preview_col_"] button:disabled,
+    [class*="st-key-preview_col_"] button:disabled [data-testid="stMarkdownContainer"],
+    [class*="st-key-preview_col_"] button:disabled [data-testid="stMarkdownContainer"] * {
         color: rgba(0, 0, 0, 0.4) !important;
         -webkit-text-fill-color: rgba(0, 0, 0, 0.4) !important;
     }
@@ -478,8 +509,399 @@ def add_css():
         opacity: 1 !important;
         cursor: default !important;
     }
+    /* These boxes apply on their own as the user types, so Streamlit's
+       "Press Enter to apply" / "Press Enter to submit form" hint is wrong. */
+    [data-testid="stTextInput"]:has(input[placeholder^="Type to filter"]) [data-testid="InputInstructions"],
+    [data-testid="stTextInput"]:has(input[aria-label="Enter keywords to search for ontology terms"]) [data-testid="InputInstructions"] {
+        display: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
+    # Newer Streamlit commits these boxes itself via live=True. The keystroke
+    # helper is only for versions that still wait for Enter, and it must not
+    # run alongside live mode or it swallows the first characters.
+    if not _text_input_supports_live():
+        _install_live_text_inputs()
+    # The available-ontology list is filtered here, in the browser, so the
+    # first character hides rows immediately. A server round trip redraws
+    # every row and only catches up after several characters have been typed.
+    _install_ontology_browser_filter()
+    _install_info_button_no_tooltip()
+
+
+# A filter or keyword search starts at this many characters. An empty box
+# leaves the list unfiltered and clears a search.
+LIVE_QUERY_MIN_CHARS = 1
+
+
+def live_query(text):
+    """Text to filter or search on, or "" until it is long enough to act on."""
+    text = str(text or "").strip()
+    if len(text) < LIVE_QUERY_MIN_CHARS:
+        return ""
+    return text
+
+
+def _text_input_supports_live():
+    """True when this Streamlit commits a text box while the user is typing."""
+    try:
+        return "live" in inspect.signature(st.text_input).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def live_text_input(label, **kwargs):
+    """Text box that filters or searches as it is typed, from the first character."""
+    if _text_input_supports_live():
+        kwargs["live"] = True
+    return st.text_input(label, **kwargs)
+
+
+def _install_info_button_no_tooltip():
+    """Drop the hover label on ℹ️ buttons.
+
+    A short label in a horizontal row gets the label text as its title, so
+    the browser shows "ℹ️" on hover. Term-list buttons used to add a second
+    tooltip, "View term details"; that help text is no longer set.
+    """
+    st.html(
+        """
+        <style>
+        [data-testid="stElementContainer"]:has(.maptology-info-notip) {
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        </style>
+        <div class="maptology-info-notip" hidden></div>
+        <script>
+        (function () {
+            if (window.__maptologyInfoNoTipV1) return;
+            window.__maptologyInfoNoTipV1 = true;
+
+            function isInfoButton(button) {
+                var parts = button.querySelectorAll(
+                    '[data-testid="stMarkdownContainer"]');
+                var label = "";
+                for (var i = 0; i < parts.length; i++) {
+                    label += (parts[i].textContent || "").replace(
+                        /\\s+/g, " ").trim();
+                }
+                return label === "ℹ️";
+            }
+
+            function clearTitles() {
+                var buttons = document.querySelectorAll("button");
+                for (var i = 0; i < buttons.length; i++) {
+                    if (!isInfoButton(buttons[i])) continue;
+                    if (buttons[i].hasAttribute("title"))
+                        buttons[i].removeAttribute("title");
+                    var titled = buttons[i].querySelectorAll("[title]");
+                    for (var j = 0; j < titled.length; j++)
+                        titled[j].removeAttribute("title");
+                }
+            }
+
+            var scheduled = false;
+            new MutationObserver(function () {
+                if (scheduled) return;
+                scheduled = true;
+                requestAnimationFrame(function () {
+                    scheduled = false;
+                    clearTitles();
+                });
+            }).observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ["title"]
+            });
+            clearTitles();
+        })();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
+
+
+def _install_ontology_browser_filter():
+    """Hide available-ontology rows as the filter box changes, with no rerun."""
+    st.html(
+        """
+        <style>
+        [data-testid="stElementContainer"]:has(.maptology-ont-filter),
+        [data-testid="stElementContainer"]:has(.maptology-ont-filter-focus) {
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        /* Hidden until a filter matches nothing. Same pale red fill as an
+           error alert; the app's text color stays black on those alerts. */
+        .maptology-ont-filter-empty,
+        [data-testid="stElementContainer"]:has(.maptology-ont-filter-empty):not(:has([class*="st-key-ont_name_av_"])),
+        [data-testid="stLayoutWrapper"]:has(.maptology-ont-filter-empty):not(:has([class*="st-key-ont_name_av_"])) {
+            display: none;
+        }
+        .maptology-ont-filter-empty {
+            box-sizing: border-box;
+            width: 100%;
+            margin: 0;
+            padding: 20px;
+            border-radius: 10px;
+            background-color: rgba(255, 43, 43, 0.1);
+            line-height: 1.4;
+        }
+        </style>
+        <div class="maptology-ont-filter"></div>
+        <script>
+        (function () {
+            if (window.__maptologyOntFilterV11) return;
+            window.__maptologyOntFilterV11 = true;
+
+            var PLACEHOLDER = "Type to filter available ontologies...";
+
+            function filterInput() {
+                return document.querySelector(
+                    'input[placeholder="' + PLACEHOLDER + '"]');
+            }
+
+            // The visible line is "ACRONYM - Name". A query matches when it
+            // appears anywhere in the name, or anywhere in the acronym.
+            function rowLabel(row) {
+                var parts = row.querySelectorAll(
+                    '[data-testid="stMarkdownContainer"]');
+                for (var j = 0; j < parts.length; j++) {
+                    var text = (parts[j].textContent || "").replace(
+                        /\\s+/g, " ").trim();
+                    if (text.indexOf(" - ") !== -1) return text;
+                }
+                return "";
+            }
+
+            function matches(label, query) {
+                if (!query) return true;
+                var split = label.indexOf(" - ");
+                var acronym = (split === -1 ? label : label.slice(0, split))
+                    .trim().toLowerCase();
+                var name = (split === -1 ? "" : label.slice(split + 3))
+                    .trim().toLowerCase();
+                if (name.indexOf(query) !== -1) return true;
+                return acronym.indexOf(query) !== -1;
+            }
+
+            function apply() {
+                var input = filterInput();
+                var query = input ? input.value.trim().toLowerCase() : "";
+                var rows = document.querySelectorAll(
+                    '[data-testid="stHorizontalBlock"][class*="st-key-ont_name_av_"]');
+                var shown = 0;
+                var scroller = null;
+                for (var i = 0; i < rows.length; i++) {
+                    var match = matches(rowLabel(rows[i]), query);
+                    // Hide the wrapper, not just the inner row. A zero-height
+                    // child still keeps the list's gap, which shoves the
+                    // match down the scroll box.
+                    var wrap = rows[i].parentElement;
+                    var box = (wrap && wrap.getAttribute("data-testid")
+                               === "stLayoutWrapper") ? wrap : rows[i];
+                    box.style.display = match ? "" : "none";
+                    if (match) shown++;
+                    if (!scroller) {
+                        var parent = box.parentElement;
+                        if (parent && getComputedStyle(parent).overflowY === "auto")
+                            scroller = parent;
+                    }
+                }
+                if (scroller && query) scroller.scrollTop = 0;
+                var empty = document.querySelector(".maptology-ont-filter-empty");
+                if (!empty) return;
+                var show = query && rows.length && shown === 0;
+                empty.textContent = show
+                    ? "No available ontology matches '" + input.value.trim() + "'."
+                    : "";
+                // The notice lives inside the list. Hide its wrappers too, or
+                // an empty slot stays at the top of the scroll box.
+                var hosts = [];
+                var node = empty.parentElement;
+                while (node && node !== document.body) {
+                    var testid = node.getAttribute("data-testid") || "";
+                    if (testid === "stVerticalBlock") break;
+                    if (testid === "stElementContainer" || testid === "stLayoutWrapper") {
+                        if (node.querySelector('[class*="st-key-ont_name_av_"]')) break;
+                        hosts.push(node);
+                    }
+                    node = node.parentElement;
+                }
+                var visible = show ? "block" : "none";
+                empty.style.display = visible;
+                for (var h = 0; h < hosts.length; h++) hosts[h].style.display = visible;
+            }
+
+            document.addEventListener("input", function (event) {
+                var node = event.target;
+                if (!node || node.getAttribute("placeholder") !== PLACEHOLDER) return;
+                apply();
+            }, true);
+
+            // After Select, the rerun leaves a marker. If the filter box
+            // already has text, put the cursor back there so typing can
+            // continue. An empty box keeps whatever focus the rerun left.
+            function focusFilterIfRequested() {
+                var marker = document.querySelector(".maptology-ont-filter-focus");
+                if (!marker) return;
+                // The token changes on each Select. The element itself may be
+                // reused, so a flag left on it last time must not hide a new one.
+                var token = marker.getAttribute("data-token") || "";
+                if (!token || marker.getAttribute("data-done") === token) return;
+                if (!filterInput()) return;
+                marker.setAttribute("data-done", token);
+                var until = Date.now() + 1000;
+                function place() {
+                    var box = filterInput();
+                    if (!box || !box.isConnected) return;
+                    if (!box.value.trim()) return;
+                    var active = document.activeElement;
+                    if (active && active !== box && active.tagName === "INPUT") return;
+                    if (active === box) return;
+                    box.focus({preventScroll: true});
+                    var end = box.value.length;
+                    try { box.setSelectionRange(end, end); } catch (err) {}
+                }
+                function finish() {
+                    document.removeEventListener("focusin", onFocusIn, true);
+                }
+                function onFocusIn(event) {
+                    if (Date.now() > until) {
+                        finish();
+                        return;
+                    }
+                    var target = event.target;
+                    if (target && target.tagName === "INPUT") return;
+                    place();
+                }
+                document.addEventListener("focusin", onFocusIn, true);
+                [0, 50, 150, 400, 800].forEach(function (ms) {
+                    setTimeout(place, ms);
+                });
+                setTimeout(finish, 1000);
+            }
+
+            // A rerun rebuilds the rows and drops the hidden flags. Put them
+            // back from whatever is still in the box.
+            var scheduled = false;
+            new MutationObserver(function () {
+                if (scheduled) return;
+                scheduled = true;
+                requestAnimationFrame(function () {
+                    scheduled = false;
+                    var input = filterInput();
+                    if (input && input.value) apply();
+                    focusFilterIfRequested();
+                });
+            }).observe(document.body, {childList: true, subtree: true});
+            focusFilterIfRequested();
+        })();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
+
+
+def _install_live_text_inputs():
+    """Commit filter and keyword boxes without Enter.
+
+    Streamlit only sends a text box's value when it blurs or Enter is pressed,
+    and it prints "Press Enter to apply" while the value is pending. These
+    boxes should act on their own: after the user pauses, send Enter for them
+    so the script sees the text. The script then ignores anything shorter than
+    LIVE_QUERY_MIN_CHARS.
+    """
+    st.html(
+        """
+        <style>
+        [data-testid="stElementContainer"]:has(.maptology-live-query) {
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        </style>
+        <div class="maptology-live-query"></div>
+        <script>
+        (function () {
+            if (window.__maptologyLiveQueryV1) return;
+            window.__maptologyLiveQueryV1 = true;
+
+            var MIN_CHARS = 1;
+            var DELAY_MS = 400;
+            var timers = new WeakMap();
+
+            function isLiveInput(node) {
+                if (!node || node.tagName !== "INPUT") return false;
+                var placeholder = node.getAttribute("placeholder") || "";
+                if (placeholder.indexOf("Type to filter") === 0) return true;
+                return (node.getAttribute("aria-label") || "")
+                    === "Enter keywords to search for ontology terms";
+            }
+
+            function applied(value) {
+                var text = (value || "").trim();
+                return text.length >= MIN_CHARS ? text : "";
+            }
+
+            function commit(input) {
+                var next = applied(input.value);
+                if (next === (input.dataset.maptologyApplied || "")) return;
+                input.dataset.maptologyApplied = next;
+                input.dispatchEvent(new KeyboardEvent("keydown", {
+                    key: "Enter",
+                    code: "Enter",
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true
+                }));
+            }
+
+            function schedule(input) {
+                var pending = timers.get(input);
+                if (pending) clearTimeout(pending);
+                timers.set(input, setTimeout(function () {
+                    timers.delete(input);
+                    if (!input.isConnected) return;
+                    commit(input);
+                }, DELAY_MS));
+            }
+
+            document.addEventListener("focusin", function (event) {
+                var input = event.target;
+                if (!isLiveInput(input)) return;
+                if (input.dataset.maptologyAppliedSet === "1") return;
+                input.dataset.maptologyApplied = applied(input.value);
+                input.dataset.maptologyAppliedSet = "1";
+            }, true);
+
+            document.addEventListener("input", function (event) {
+                var input = event.target;
+                if (!isLiveInput(input) || event.isComposing) return;
+                schedule(input);
+            }, true);
+
+            document.addEventListener("compositionend", function (event) {
+                var input = event.target;
+                if (!isLiveInput(input)) return;
+                schedule(input);
+            }, true);
+        })();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
 
 # pandas 데이터 타입을 사용자 친화적으로 변환 / Convert pandas dtype to user-friendly name
 def get_friendly_dtype(dtype):

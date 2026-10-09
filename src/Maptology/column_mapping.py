@@ -8,8 +8,15 @@ from mapping import (
     add_column_term,
     remove_column_term,
 )
-from components import show_term_modal
-from utils import get_friendly_dtype, display_column_info, get_column_data_type, validate_type_change
+from components import render_term_info_popover
+from utils import (
+    get_friendly_dtype,
+    display_column_info,
+    get_column_data_type,
+    validate_type_change,
+    live_query,
+    live_text_input,
+)
 
 
 def _render_term_checklist(df, key_prefix, column):
@@ -38,28 +45,25 @@ def _render_term_checklist(df, key_prefix, column):
             add_clicked = st.button("Add", key="add_" + base)
             st.markdown(str(row["Preferred Label"]) + "  —  "
                         + str(row["Ontology Name"]))
-            info_clicked = st.button("ℹ️", key="info_" + base,
-                                     help="View term details", type="tertiary")
-        if add_clicked:
-            add_column_term(column, row)
-            st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
-            st.rerun()
-        if info_clicked:
             ontology_info = get_ontology_details(row["Ontology Name"])
-            show_term_modal({
+            render_term_info_popover({
                 "pref_label": row["Preferred Label"],
                 "ontology_abbr": row["Ontology Name"],
                 "full_ontology_name": ontology_info["full_name"],
                 "definition": row["Definition"],
                 "term_uri": row["Ontology Term URI"],
                 "synonyms": row.get("Synonyms", []),
-            })
+            }, "info_" + base)
+        if add_clicked:
+            add_column_term(column, row)
+            st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
+            st.rerun()
 
 
 # Render column selection and ontology mapping section
 def render_column_mapping_section():
     st.write("### Step 5: Map Ontology Terms for Columns")
-    st.markdown("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them to each other. Start by selecting a column name from the dropdown below.")
+    st.markdown("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them to each other. Start by selecting a column name from the dropdown below. The data type of the column will be inferred from the data in the column, but you can change it if you like. If you change it, be sure to choose a data type that is compatible with the data in the column. Any column can be a string, but other data types are available for columns with data that is more specific.")
 
     if st.session_state.uploaded_df is not None:
         columns = list(st.session_state.uploaded_df.columns)
@@ -85,7 +89,7 @@ def render_column_mapping_section():
             st.session_state.selected_column = selected_column
 
             # ========== Select Data Type section ==========
-            st.markdown('<div class="sub-heading">Select Data Type</div>', unsafe_allow_html=True)
+            st.markdown('<div class="sub-heading">Select data type</div>', unsafe_allow_html=True)
 
             df = st.session_state.uploaded_df
 
@@ -125,10 +129,10 @@ def render_column_mapping_section():
                         and len(st.session_state.filtered_ontology_results) > 0)
 
             st.markdown('<div class="sub-heading">Select ontology terms</div>', unsafe_allow_html=True)
-            st.markdown("Add ontology terms with the Add button, or click the ℹ️ icon to view a term's details. You can also search for more terms.")
+            st.markdown("Maptology attempts to automatically suggest ontology terms for your column. If you like one of these suggestions, click on the Add button next to it. (To read more about an ontology term, click on the ℹ️ icon next to the term name. If none of the suggestions are useful (or none are provided), you can search for more terms.")
 
-            # Full-width list. Term details open in a modal popup (ℹ️) instead of
-            # an always-on side panel, so the list can use the whole width.
+            # Full-width list. Term details open in a popover (ℹ️), same as the
+            # ontology lists, so the list can use the whole width.
             if has_auto:
                 with st.container(height=300):
                     st.write("Click Add next to any term that matches your column:")
@@ -138,26 +142,26 @@ def render_column_mapping_section():
                         selected_column,
                     )
             else:
-                st.markdown("No automatic matches for this column name. Use the keyword search below.")
+                st.error("No automatic matches for this column name. Use the keyword search below.")
 
             # ========== Manual search section (always available) ==========
+            # The box searches on its own once it has a character. An empty
+            # box clears the previous keyword results.
             with st.container(border=True):
-                with st.form(key="column_search_form"):
-                    column_search_term = st.text_input("Enter keywords to search for ontology terms", key="manual_column_search")
-                    search_submitted = st.form_submit_button("Search Selected Ontologies")
-
-                    if search_submitted:
-                        if column_search_term:
-                            with st.spinner("Searching for '" + column_search_term + "'..."):
-                                search_success = search_bioportal_manual_column(column_search_term)
-
-                            if search_success:
-                                st.success("Search results found for '" + column_search_term + "'.")
-                                st.rerun()
-                            else:
-                                st.warning("No results found for '" + column_search_term + "'.")
-                        else:
-                            st.warning("Please enter a search term.")
+                column_search_term = live_text_input(
+                    "Enter keyword(s) to search for ontology terms",
+                    key="manual_column_search",
+                )
+                column_query = live_query(column_search_term)
+                if not column_query:
+                    st.session_state.manual_column_search_query = ""
+                    st.session_state.manual_column_search_results = None
+                elif column_query != st.session_state.get("manual_column_search_query"):
+                    with st.spinner("Searching for '" + column_query + "'..."):
+                        search_success = search_bioportal_manual_column(column_query)
+                    st.session_state.manual_column_search_query = column_query
+                    if not search_success:
+                        st.warning("No results found for '" + column_query + "'.")
 
                 # Manual search results. Hide any term already shown in the auto
                 # list above (professor: "only show terms down here that are not

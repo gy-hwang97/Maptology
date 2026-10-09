@@ -52,6 +52,15 @@ def _render_term_details(info):
     st.markdown(f"[Open this term on BioPortal ↗]({detail_url})")
 
 
+def render_term_info_popover(info, key):
+    """Open term details beside the row, without rerunning the page.
+
+    Same control as the ontology lists: a tertiary ℹ️ that opens a popover.
+    """
+    with st.popover("ℹ️", type="tertiary", key=key):
+        _render_term_details(info)
+
+
 @st.dialog("Term Preview")
 def show_term_modal(info):
     """Show one term's details in a modal popup. Dismissed with the built-in X

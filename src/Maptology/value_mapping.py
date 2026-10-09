@@ -8,8 +8,8 @@ from mapping import (
     add_value_term,
     remove_value_term,
 )
-from components import show_term_modal
-from utils import validate_type_change, get_column_data_type
+from components import render_term_info_popover
+from utils import validate_type_change, get_column_data_type, live_query, live_text_input
 
 
 # Above this many distinct values, the value dropdown also gets a filter box.
@@ -43,22 +43,19 @@ def _render_value_checklist(df, key_prefix, column, value):
             add_clicked = st.button("Add", key="add_" + base)
             st.markdown(str(row["Preferred Label"]) + "  —  "
                         + str(row["Ontology Name"]))
-            info_clicked = st.button("ℹ️", key="info_" + base,
-                                     help="View term details", type="tertiary")
-        if add_clicked:
-            add_value_term(column, value, row)
-            st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
-            st.rerun()
-        if info_clicked:
             ontology_info = get_ontology_details(row["Ontology Name"])
-            show_term_modal({
+            render_term_info_popover({
                 "pref_label": row["Preferred Label"],
                 "ontology_abbr": row["Ontology Name"],
                 "full_ontology_name": ontology_info["full_name"],
                 "definition": row["Definition"],
                 "term_uri": row["Ontology Term URI"],
                 "synonyms": row.get("Synonyms", []),
-            })
+            }, "info_" + base)
+        if add_clicked:
+            add_value_term(column, value, row)
+            st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
+            st.rerun()
 
 
 # Render value mapping section
@@ -113,11 +110,11 @@ def render_value_mapping_section():
             # list is big enough to need one. Short columns render exactly as before.
             value_options = all_values
             if len(all_values) > VALUE_FILTER_THRESHOLD:
-                needle = st.text_input(
+                needle = live_query(live_text_input(
                     "Filter values",
                     key="value_filter__" + str(selected_col),
                     placeholder="Type to filter values...",
-                )
+                ))
                 if needle:
                     matches = [v for v in all_values if needle.lower() in v.lower()]
                     if matches:
@@ -152,7 +149,8 @@ def render_value_mapping_section():
                 selected_value = st.session_state.selected_unique_value
                 st.markdown('<div class="sub-heading">Select ontology terms for value: \'' + str(selected_value) + '\'</div>', unsafe_allow_html=True)
 
-                # Full-width list. Term details open in a modal popup (ℹ️).
+                # Full-width list. Term details open in a popover (ℹ️), same as
+                # the ontology lists.
                 with st.container(height=300):
                     st.write("Click Add next to any term that matches '" + str(selected_value) + "':")
                     _render_value_checklist(
@@ -163,23 +161,23 @@ def render_value_mapping_section():
                     )
 
             # ========== Manual search section (always visible) ==========
+            # The box searches on its own once it has a character. An empty
+            # box clears the previous keyword results.
             with st.container(border=True):
-                with st.form(key="value_search_form"):
-                    value_search_term = st.text_input("Enter keywords to search for ontology terms", key="manual_value_search")
-                    search_submitted = st.form_submit_button("Search Selected Ontologies")
-
-                    if search_submitted:
-                        if value_search_term:
-                            with st.spinner("Searching for '" + value_search_term + "'..."):
-                                search_success = search_bioportal_manual_value(value_search_term)
-
-                            if search_success:
-                                st.success("Search results found for '" + value_search_term + "'.")
-                                st.rerun()
-                            else:
-                                st.warning("No results found for '" + value_search_term + "'.")
-                        else:
-                            st.warning("Please enter a search term.")
+                value_search_term = live_text_input(
+                    "Enter keyword(s) to search for ontology terms",
+                    key="manual_value_search",
+                )
+                value_query = live_query(value_search_term)
+                if not value_query:
+                    st.session_state.manual_value_search_query = ""
+                    st.session_state.manual_value_search_results = None
+                elif value_query != st.session_state.get("manual_value_search_query"):
+                    with st.spinner("Searching for '" + value_query + "'..."):
+                        search_success = search_bioportal_manual_value(value_query)
+                    st.session_state.manual_value_search_query = value_query
+                    if not search_success:
+                        st.warning("No results found for '" + value_query + "'.")
 
                 # Manual search results. Hide any term already shown in the auto
                 # list above, then cap at 10.
