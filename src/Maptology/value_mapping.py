@@ -58,8 +58,20 @@ def _render_value_checklist(df, key_prefix, column, value):
             st.rerun()
 
 
-# Render value mapping section
+# Render value mapping section.
+# Mounted with Step 5, and hidden with it until an ontology is selected.
+@st.fragment(key="value_mapping")
 def render_value_mapping_section():
+    with st.container(key="step6_block"):
+        _render_step6()
+
+
+def _render_step6():
+    if (not st.session_state.selected_column
+            or st.session_state.uploaded_df is None):
+        st.html('<div class="maptology-step-idle" hidden></div>')
+        return
+
     st.write("### Step 6: Map Ontology Terms for Values")
     st.markdown("Now you can map ontology term(s) to each data value. Start by selecting a value from the dropdown below.")
     selected_col = st.session_state.selected_column

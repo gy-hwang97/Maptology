@@ -452,6 +452,13 @@ def add_css():
         margin-top: 10px;
         margin-bottom: 14px;
     }
+    /* "Select a column" sits above the Step 5 dropdown. Same italic treatment
+       as the sub-headings, without changing the column names in the menu. */
+    .st-key-column_select [data-testid="stWidgetLabel"],
+    .st-key-column_select [data-testid="stWidgetLabel"] p {
+        font-style: italic !important;
+        font-weight: normal !important;
+    }
     /* Button labels live in a markdown container whose text is forced black,
        which hides Streamlit's faded disabled color. Download, Previous, and
        Next should read as unavailable when they cannot be used. The preview
@@ -635,18 +642,79 @@ def _install_ontology_browser_filter():
         """
         <style>
         [data-testid="stElementContainer"]:has(.maptology-ont-filter),
-        [data-testid="stElementContainer"]:has(.maptology-ont-filter-focus) {
+        [data-testid="stElementContainer"]:has(.maptology-ont-filter-focus),
+        [data-testid="stElementContainer"]:has(input[placeholder="ontology-select-request"]),
+        [data-testid="stElementContainer"]:has(input[placeholder="ontology-remove-request"]),
+        [data-testid="stElementContainer"]:has(.maptology-step-idle) {
             display: none !important;
             height: 0 !important;
             min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
         }
+        body.maptology-scroll-lock .stMain {
+            overflow-anchor: none !important;
+        }
+        body.maptology-no-ontologies .st-key-step5_block,
+        body.maptology-no-ontologies .st-key-step6_block,
+        [data-testid="stElementContainer"]:has(.maptology-sel-block[hidden]) {
+            display: none !important;
+        }
+        .maptology-ont-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin: 0.35rem 0.15rem;
+        }
+        .maptology-ont-label {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow-wrap: anywhere;
+            padding-top: 0.35rem;
+        }
+        .maptology-ont-select,
+        .maptology-ont-remove {
+            flex: 0 0 auto;
+            background: #ffffff;
+            color: #31333f;
+            border: 1px solid rgba(49, 51, 63, 0.2);
+            border-radius: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            line-height: 1.6;
+            cursor: pointer;
+        }
+        .maptology-ont-select:disabled {
+            color: rgba(49, 51, 63, 0.4);
+            cursor: not-allowed;
+        }
+        .maptology-ont-info {
+            flex: 0 0 auto;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            padding: 0.35rem 0.15rem;
+        }
+        .maptology-ont-details {
+            margin: 0 0.15rem 0.75rem 0.15rem;
+            padding: 0.4rem 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+            background: #f8f9fa;
+        }
+        .maptology-ont-details p {
+            margin: 0.25rem 0;
+        }
+        .maptology-selected-live {
+            margin-top: 0.75rem;
+        }
+        .maptology-sel-heading {
+            margin-top: 0.75rem;
+        }
         /* Hidden until a filter matches nothing. Same pale red fill as an
            error alert; the app's text color stays black on those alerts. */
         .maptology-ont-filter-empty,
-        [data-testid="stElementContainer"]:has(.maptology-ont-filter-empty):not(:has([class*="st-key-ont_name_av_"])),
-        [data-testid="stLayoutWrapper"]:has(.maptology-ont-filter-empty):not(:has([class*="st-key-ont_name_av_"])) {
+        [data-testid="stElementContainer"]:has(.maptology-ont-filter-empty):not(:has(.maptology-ont-row)),
+        [data-testid="stLayoutWrapper"]:has(.maptology-ont-filter-empty):not(:has(.maptology-ont-row)) {
             display: none;
         }
         .maptology-ont-filter-empty {
@@ -662,8 +730,8 @@ def _install_ontology_browser_filter():
         <div class="maptology-ont-filter"></div>
         <script>
         (function () {
-            if (window.__maptologyOntFilterV11) return;
-            window.__maptologyOntFilterV11 = true;
+            if (window.__maptologyOntFilterV13) return;
+            window.__maptologyOntFilterV13 = true;
 
             var PLACEHOLDER = "Type to filter available ontologies...";
 
@@ -675,6 +743,8 @@ def _install_ontology_browser_filter():
             // The visible line is "ACRONYM - Name". A query matches when it
             // appears anywhere in the name, or anywhere in the acronym.
             function rowLabel(row) {
+                var own = row.querySelector(".maptology-ont-label");
+                if (own) return (own.textContent || "").replace(/\\s+/g, " ").trim();
                 var parts = row.querySelectorAll(
                     '[data-testid="stMarkdownContainer"]');
                 for (var j = 0; j < parts.length; j++) {
@@ -700,10 +770,12 @@ def _install_ontology_browser_filter():
                 var input = filterInput();
                 var query = input ? input.value.trim().toLowerCase() : "";
                 var rows = document.querySelectorAll(
-                    '[data-testid="stHorizontalBlock"][class*="st-key-ont_name_av_"]');
+                    '[data-testid="stHorizontalBlock"][class*="st-key-ont_name_av_"], .maptology-ont-row');
                 var shown = 0;
                 var scroller = null;
                 for (var i = 0; i < rows.length; i++) {
+                    if (rows[i].classList.contains("maptology-ont-pending")) continue;
+                    if (rows[i].classList.contains("maptology-sel-row")) continue;
                     var match = matches(rowLabel(rows[i]), query);
                     // Hide the wrapper, not just the inner row. A zero-height
                     // child still keeps the list's gap, which shoves the
@@ -712,6 +784,9 @@ def _install_ontology_browser_filter():
                     var box = (wrap && wrap.getAttribute("data-testid")
                                === "stLayoutWrapper") ? wrap : rows[i];
                     box.style.display = match ? "" : "none";
+                    var details = rows[i].nextElementSibling;
+                    if (details && details.classList.contains("maptology-ont-details"))
+                        details.style.display = match ? "" : "none";
                     if (match) shown++;
                     if (!scroller) {
                         var parent = box.parentElement;

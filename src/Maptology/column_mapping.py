@@ -1,7 +1,12 @@
 import hashlib
 
 import streamlit as st
-from ontology import search_ontology, search_bioportal_manual_column, get_ontology_details
+from ontology import (
+    search_ontology,
+    search_ontology_for_value,
+    search_bioportal_manual_column,
+    get_ontology_details,
+)
 from mapping import (
     on_column_select,
     is_column_term_mapped,
@@ -60,26 +65,56 @@ def _render_term_checklist(df, key_prefix, column):
             st.rerun()
 
 
-# Render column selection and ontology mapping section
+def _sync_column_search_state():
+    """Search again after the chosen ontologies change.
+
+    The column is picked as soon as a file is loaded, so Step 5 can sit on the
+    page (hidden) before any ontology is selected. The search itself waits
+    until an ontology is actually selected.
+    """
+    changed = bool(st.session_state.ontologies_changed)
+    if changed:
+        st.session_state.manual_column_search_results = None
+        st.session_state.manual_value_search_results = None
+        st.session_state.manual_column_search_query = ""
+        st.session_state.manual_value_search_query = ""
+    df = st.session_state.uploaded_df
+    columns = list(df.columns) if df is not None else []
+    if (st.session_state.first_load and columns
+            and not st.session_state.get("selected_column")):
+        first_column = columns[0]
+        st.session_state.selected_column = first_column
+        st.session_state.column_select = first_column
+    if ((changed or st.session_state.first_load)
+            and st.session_state.selected_ontologies
+            and st.session_state.selected_column):
+        search_ontology(st.session_state.selected_column)
+        if st.session_state.selected_unique_value:
+            search_ontology_for_value(st.session_state.selected_unique_value)
+        st.session_state.first_load = False
+    if changed:
+        st.session_state.ontologies_changed = False
+
+
+# Render column selection and ontology mapping section.
+# The section is on the page before an ontology is chosen, and hidden until
+# then, so the first selection can reveal it without redrawing the lists.
+@st.fragment(key="column_mapping")
 def render_column_mapping_section():
+    _sync_column_search_state()
+    with st.container(key="step5_block"):
+        _render_step5()
+
+
+def _render_step5():
     st.write("### Step 5: Map Ontology Terms for Columns")
     st.markdown("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them. Start by selecting a column name from the dropdown below. The data type of the column will be inferred from the data, but you can change it if you would like. If you change it, be sure to choose a data type that is compatible with the data in the column. Any column can be a string, but other data types are only available for columns with compatible data.")
 
     if st.session_state.uploaded_df is not None:
         columns = list(st.session_state.uploaded_df.columns)
 
-        # Auto-select and search first column on initial file load
-        if st.session_state.first_load and columns:
-            first_column = columns[0]
-            st.session_state.selected_column = first_column
-            st.session_state.column_select = first_column
-
-            search_ontology(first_column)
-
-            st.session_state.first_load = False
-
         selected_column = st.selectbox(
-            '<div class="sub-heading">Select a column</div>',
+            'Select a column',
             columns,
             key="column_select",
             on_change=on_column_select
@@ -142,7 +177,8 @@ def render_column_mapping_section():
                         selected_column,
                     )
             else:
-                st.error("No automatic matches for this column name. Use the keyword search below.")
+                if not st.session_state.first_load:
+                    st.error("No automatic matches for this column name. Use the keyword search below.")
 
             # ========== Manual search section (always available) ==========
             # The box searches on its own once it has a character. An empty

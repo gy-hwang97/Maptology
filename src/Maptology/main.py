@@ -318,13 +318,11 @@ if uploaded_file:
     # st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
     render_ontology_selection(available_ontologies)
 
-    # Column selection and ontology mapping section (requires ontologies)
-    if st.session_state.selected_ontologies:
-        render_column_mapping_section()
-
-        # Section for mapping values to ontology terms
-        if st.session_state.selected_column and st.session_state.uploaded_df is not None:
-            render_value_mapping_section()
+    # Steps 5 and 6 stay mounted so selecting or removing an ontology can
+    # refresh them without redrawing the page above. Each one draws nothing
+    # until there is something to map.
+    render_column_mapping_section()
+    render_value_mapping_section()
 
     # Results tables and downloads - shown whenever mappings exist, whether
     # they came from a search or from an imported file.
