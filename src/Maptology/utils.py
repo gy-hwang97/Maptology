@@ -340,8 +340,11 @@ def add_css():
     [data-testid="stMainBlockContainer"] {
         padding-top: 1rem !important;
     }
+    /* .stMain is the element that scrolls. A max-width here puts the
+       scrollbar in from the window edge and leaves a blank strip beside it. */
     .stMain {
-        max-width: 95% !important;
+        max-width: none !important;
+        width: 100% !important;
         padding: 1rem;
     }
     .term-box {

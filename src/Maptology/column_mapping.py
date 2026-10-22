@@ -63,7 +63,7 @@ def _render_term_checklist(df, key_prefix, column):
 # Render column selection and ontology mapping section
 def render_column_mapping_section():
     st.write("### Step 5: Map Ontology Terms for Columns")
-    st.markdown("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them to each other. Start by selecting a column name from the dropdown below. The data type of the column will be inferred from the data in the column, but you can change it if you like. If you change it, be sure to choose a data type that is compatible with the data in the column. Any column can be a string, but other data types are available for columns with data that is more specific.")
+    st.markdown("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them. Start by selecting a column name from the dropdown below. The data type of the column will be inferred from the data, but you can change it if you would like. If you change it, be sure to choose a data type that is compatible with the data in the column. Any column can be a string, but other data types are only available for columns with compatible data.")
 
     if st.session_state.uploaded_df is not None:
         columns = list(st.session_state.uploaded_df.columns)
@@ -79,7 +79,7 @@ def render_column_mapping_section():
             st.session_state.first_load = False
 
         selected_column = st.selectbox(
-            "Select a column to map",
+            '<div class="sub-heading">Select a column</div>',
             columns,
             key="column_select",
             on_change=on_column_select

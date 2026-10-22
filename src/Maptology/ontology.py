@@ -959,8 +959,7 @@ def render_ontology_selection(available_ontologies):
     if n_downloaded > 0:
         # st.markdown('<div class="sub-heading">Available ontologies</div>',
         #             unsafe_allow_html=True)
-        st.markdown("The following ontologies have been downloaded. Select any "
-                   "that you wish to use when annotating your data.")
+        st.markdown("Select any of the following ontologies that you wish to use when annotating your data.")
         _render_available_ontologies(available_ontologies)
 
     # Selected ontologies appear only once at least one has been chosen.
