@@ -343,6 +343,7 @@ def _render_download_row(ont, queued=False, show_info=True, locked=False):
     with st.container(horizontal=True, vertical_alignment="center",
                       key="ont_name_dl_" + acronym):
         st.button("Download", key="download_" + acronym,
+                  help="Download " + acronym + " - " + ont["name"],
                   disabled=queued or locked,
                   on_click=_queue_ontology_download,
                   args=(acronym, ont["name"]))
@@ -351,7 +352,11 @@ def _render_download_row(ont, queued=False, show_info=True, locked=False):
         # up over the row. Nothing reruns, so it opens at once; the chevron
         # Streamlit adds to a popover is hidden in CSS.
         if show_info:
-            with st.popover("ℹ️", type="tertiary"):
+            with st.popover(
+                "ℹ️",
+                type="tertiary",
+                help="View description of " + acronym + " - " + ont["name"],
+            ):
                 _render_ontology_details(ont)
 
 
@@ -960,9 +965,9 @@ def _available_ontology_list_html(available, at_limit, selected_count):
             meta.append("Released: " + str(ont["released"])[:10])
         rows.append(
             '<div class="maptology-ont-row" data-acronym="%s"%s>'
-            '<button type="button" class="maptology-ont-select"%s>Select</button>'
+            '<button type="button" class="maptology-ont-select" aria-label="%s"%s>Select</button>'
             '<span class="maptology-ont-label">%s</span>'
-            '<button type="button" class="maptology-ont-info" aria-label="View description">ℹ️</button>'
+            '<button type="button" class="maptology-ont-info" aria-label="%s">ℹ️</button>'
             '</div>'
             '<div class="maptology-ont-details" hidden>'
             '<p><strong>%s</strong></p><p>%s</p>%s'
@@ -970,8 +975,10 @@ def _available_ontology_list_html(available, at_limit, selected_count):
             % (
                 html.escape(acronym, quote=True),
                 ' data-update="1"' if ont.get("update_available") else "",
+                html.escape("Select " + label, quote=True),
                 " disabled" if at_limit else "",
                 html.escape(label),
+                html.escape("View description of " + label, quote=True),
                 html.escape(acronym + " - " + name),
                 html.escape(description),
                 ("<p>%s</p>" % html.escape("  |  ".join(meta))) if meta else "",
@@ -1101,6 +1108,7 @@ def _available_ontology_list_html(available, at_limit, selected_count):
                 button.className = "maptology-ont-select";
                 button.disabled = true;
                 button.textContent = "Remove";
+                button.setAttribute("aria-label", "Remove " + label);
                 var name = document.createElement("span");
                 name.className = "maptology-ont-label";
                 name.textContent = label;
@@ -1448,18 +1456,20 @@ def _selected_ontology_rows_html(selected, names):
     """
     parts = [
         '<div class="maptology-sel-block"%s>' % ("" if selected else " hidden"),
-        '<div class="sub-heading maptology-sel-heading">Selected ontologies ('
-        + str(len(selected)) + '/' + str(MAX_SELECTED_ONTOLOGIES) + ')</div>',
+        '<h4 class="sub-heading maptology-sel-heading">Selected ontologies ('
+        + str(len(selected)) + '/' + str(MAX_SELECTED_ONTOLOGIES) + ')</h4>',
         '<div class="maptology-sel-list">',
     ]
     for acronym in selected:
         label = acronym + " - " + (names.get(acronym) or acronym)
         parts.append(
             '<div class="maptology-ont-row maptology-sel-row" data-acronym="%s">'
-            '<button type="button" class="maptology-ont-remove">Remove</button>'
+            '<button type="button" class="maptology-ont-remove" aria-label="%s">Remove</button>'
             '<span class="maptology-ont-label">%s</span>'
             '</div>'
-            % (html.escape(acronym, quote=True), html.escape(label)))
+            % (html.escape(acronym, quote=True),
+               html.escape("Remove " + label, quote=True),
+               html.escape(label)))
     parts.append("</div></div>")
     return "".join(parts)
 

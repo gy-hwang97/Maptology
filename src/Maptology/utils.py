@@ -145,8 +145,8 @@ def _install_instant_mapping_delete():
         """
         <script>
         (function () {
-            if (window.__maptologyTrashV9) return;
-            window.__maptologyTrashV9 = true;
+            if (window.__maptologyTrashV10) return;
+            window.__maptologyTrashV10 = true;
 
             var pending = Object.create(null);
             var styleEl = null;
@@ -203,7 +203,12 @@ def _install_instant_mapping_delete():
                 if (changed) rebuildPending();
             }
 
-            new MutationObserver(prunePending).observe(document.documentElement, {
+            new MutationObserver(function () {
+                prunePending();
+                labelControls();
+                markMappingTables();
+                restoreDeleteFocus();
+            }).observe(document.documentElement, {
                 subtree: true,
                 childList: true,
                 attributes: true,
@@ -271,9 +276,18 @@ def _install_instant_mapping_delete():
             // Keep the table on the same part of the screen. Showing the
             // search row again, and Streamlit scrolling the focused button,
             // would otherwise shift the page.
+            var holdingTable = false;
+
             function holdTable(anchor) {
                 var main = document.querySelector(".stMain");
-                if (!main || !anchor) return;
+                if (!main || !anchor || holdingTable) return;
+                var parts = (anchor.className || "").split(/\\s+/);
+                var key = "";
+                for (var i = 0; i < parts.length; i++) {
+                    if (parts[i].indexOf("st-key-") === 0) { key = parts[i]; break; }
+                }
+                if (!key) return;
+                holdingTable = true;
                 var top = anchor.getBoundingClientRect().top;
                 var until = Date.now() + 1500;
                 var user = false;
@@ -281,14 +295,22 @@ def _install_instant_mapping_delete():
                 document.addEventListener("wheel", release, {capture: true, passive: true, once: true});
                 document.addEventListener("touchmove", release, {capture: true, passive: true, once: true});
                 function tick() {
-                    if (user || Date.now() > until || !anchor.isConnected) return;
-                    var drift = anchor.getBoundingClientRect().top - top;
-                    if (Math.abs(drift) > 1) {
-                        main.scrollTop += drift;
-                        var saved = window.__maptologyScrollLock;
-                        if (saved && !saved.user) {
-                            saved.main = main.scrollTop;
-                            saved.win = window.scrollY || 0;
+                    if (user || Date.now() > until) {
+                        holdingTable = false;
+                        return;
+                    }
+                    var current = document.querySelector("." + key);
+                    if (current) {
+                        var drift = current.getBoundingClientRect().top - top;
+                        if (Math.abs(drift) > 1) {
+                            main.scrollTop += drift;
+                            var left = current.getBoundingClientRect().top - top;
+                            if (Math.abs(left) > 1) window.scrollBy(0, left);
+                            var saved = window.__maptologyScrollLock;
+                            if (saved && !saved.user) {
+                                saved.main = main.scrollTop;
+                                saved.win = window.scrollY || 0;
+                            }
                         }
                     }
                     requestAnimationFrame(tick);
@@ -296,14 +318,211 @@ def _install_instant_mapping_delete():
                 requestAnimationFrame(tick);
             }
 
+            function announce(text) {
+                if (!text) return;
+                var live = document.getElementById("maptology-live");
+                if (!live) {
+                    live = document.createElement("div");
+                    live.id = "maptology-live";
+                    live.className = "maptology-sr-only";
+                    live.setAttribute("aria-live", "polite");
+                    live.setAttribute("aria-atomic", "true");
+                    document.body.appendChild(live);
+                }
+                live.textContent = "";
+                setTimeout(function () { live.textContent = text; }, 30);
+            }
+
+            function plainText(node) {
+                if (!node) return "";
+                var clone = node.cloneNode(true);
+                var hidden = clone.querySelectorAll(".maptology-sr-only");
+                for (var i = 0; i < hidden.length; i++) hidden[i].remove();
+                return (clone.textContent || "").replace(/ℹ️/g, "").replace(/\\s+/g, " ").trim();
+            }
+
+            function rowTexts(row) {
+                var nodes = row.querySelectorAll("[data-testid='stMarkdownContainer']");
+                var texts = [];
+                for (var i = 0; i < nodes.length; i++)
+                    texts.push(plainText(nodes[i]));
+                return texts;
+            }
+
+            function labelControls() {
+                var rows = document.querySelectorAll(
+                    ".st-key-mapped_terms_rows > [data-testid='stLayoutWrapper']");
+                for (var i = 0; i < rows.length; i++) {
+                    var button = rows[i].querySelector("[class*='st-key-delete_col_'] button");
+                    if (!button) continue;
+                    var cells = rowTexts(rows[i]);
+                    if (cells.length >= 2)
+                        button.setAttribute("aria-label", "Remove " + cells[1] + " from " + cells[0]);
+                }
+                rows = document.querySelectorAll(
+                    ".st-key-value_mappings_rows > [data-testid='stLayoutWrapper']");
+                for (var j = 0; j < rows.length; j++) {
+                    var valueButton = rows[j].querySelector("[class*='st-key-delete_val_'] button");
+                    if (!valueButton) continue;
+                    var valueCells = rowTexts(rows[j]);
+                    if (valueCells.length >= 3)
+                        valueButton.setAttribute(
+                            "aria-label",
+                            "Remove " + valueCells[2] + " from " + valueCells[1] + " in " + valueCells[0]);
+                }
+                var adds = document.querySelectorAll(
+                    "[class*='st-key-term_row_c_'] button, [class*='st-key-term_row_v_'] button");
+                for (var a = 0; a < adds.length; a++) {
+                    if ((adds[a].innerText || "").replace(/\\s+/g, " ").trim() !== "Add") continue;
+                    var addHost = adds[a].closest(
+                        "[class*='st-key-term_row_c_'], [class*='st-key-term_row_v_']");
+                    var addText = addHost ? plainText(addHost) : "";
+                    addText = addText.replace(/^(Add\\s*)+/, "");
+                    if (addText) adds[a].setAttribute("aria-label", "Add " + addText);
+                }
+                var downloads = document.querySelectorAll("button");
+                for (var d = 0; d < downloads.length; d++) {
+                    if ((downloads[d].innerText || "").replace(/\\s+/g, " ").trim() !== "Download") continue;
+                    var downloadRow = downloads[d].closest("[data-testid='stHorizontalBlock']");
+                    var downloadText = downloadRow ? plainText(downloadRow) : "";
+                    downloadText = downloadText.replace(/^Download\\s*/, "");
+                    if (downloadText)
+                        downloads[d].setAttribute("aria-label", "Download " + downloadText);
+                }
+                var infos = document.querySelectorAll("[data-testid='stPopoverButton']");
+                for (var n = 0; n < infos.length; n++) {
+                    var infoRow = infos[n].closest("[data-testid='stHorizontalBlock']");
+                    var infoText = infoRow ? plainText(infoRow) : "";
+                    infoText = infoText.replace(/^(Add|Download)\\s*/, "");
+                    if (infoText)
+                        infos[n].setAttribute("aria-label", "View description of " + infoText);
+                }
+            }
+
+            function markMappingTables() {
+                var tables = [
+                    [".st-key-mapped_terms_rows", "Mapped ontology terms"],
+                    [".st-key-value_mappings_rows", "Unique values' ontology terms"]
+                ];
+                for (var t = 0; t < tables.length; t++) {
+                    var root = document.querySelector(tables[t][0]);
+                    if (!root) continue;
+                    root.setAttribute("role", "table");
+                    root.setAttribute("aria-label", tables[t][1]);
+                    var rowIndex = 0;
+                    var kids = root.children;
+                    for (var i = 0; i < kids.length; i++) {
+                        var el = kids[i];
+                        if (el.getAttribute("data-testid") === "stElementContainer" && el.querySelector("hr")) {
+                            el.setAttribute("aria-hidden", "true");
+                            continue;
+                        }
+                        if (el.getAttribute("data-testid") !== "stLayoutWrapper") continue;
+                        el.setAttribute("role", "row");
+                        var block = el.querySelector("[data-testid='stHorizontalBlock']");
+                        if (!block) continue;
+                        var cells = block.children;
+                        for (var c = 0; c < cells.length; c++) {
+                            cells[c].setAttribute("role", rowIndex === 0 ? "columnheader" : "cell");
+                            if (rowIndex === 0 && c === cells.length - 1 && !(cells[c].innerText || "").trim())
+                                cells[c].setAttribute("aria-label", "Remove");
+                        }
+                        rowIndex++;
+                    }
+                }
+            }
+
+            function focusTarget(spec) {
+                if (spec === "mapped-heading")
+                    return document.querySelector(".st-key-mapped_terms_block .sub-heading");
+                if (spec === "value-heading")
+                    return document.querySelector(".st-key-value_mappings_block .sub-heading");
+                return spec ? document.querySelector("." + spec + " button") : null;
+            }
+
+            function restoreDeleteFocus() {
+                var spec = window.__maptologyRestoreFocus;
+                if (!spec) return;
+                var app = document.querySelector("[data-testid='stApp']");
+                var script = app && app.getAttribute("data-test-script-state");
+                if (script && script !== "notRunning" && script !== "initial") {
+                    window.__maptologyRestoreSawRun = true;
+                    return;
+                }
+                if (!window.__maptologyRestoreSawRun) return;
+                window.__maptologyRestoreSawRun = false;
+                var active = document.activeElement;
+                if (active && active !== document.body && active !== document.documentElement) {
+                    window.__maptologyRestoreFocus = "";
+                    return;
+                }
+                var target = focusTarget(spec);
+                if (!target) return;
+                if (target.classList.contains("sub-heading"))
+                    target.setAttribute("tabindex", "-1");
+                target.focus({preventScroll: true});
+                window.__maptologyRestoreFocus = "";
+            }
+
+            function neighboringTrash(start, step, current) {
+                var node = start;
+                while (node) {
+                    if (node.getAttribute && node.getAttribute("data-testid") === "stLayoutWrapper") {
+                        var button = node.querySelector(
+                            "[class*='st-key-delete_col_'] button, [class*='st-key-delete_val_'] button");
+                        if (button && button !== current) return button;
+                    }
+                    node = step > 0 ? node.nextElementSibling : node.previousElementSibling;
+                }
+                return null;
+            }
+
+            function placeFocusAfterDelete(row, current, isColumn) {
+                var next = row ? neighboringTrash(row.nextElementSibling, 1, current) : null;
+                if (!next && row)
+                    next = neighboringTrash(row.previousElementSibling, -1, current);
+                if (next) {
+                    var host = next.closest("[class*='st-key-delete_col_'], [class*='st-key-delete_val_']");
+                    var parts = host ? (host.className || "").split(/\\s+/) : [];
+                    window.__maptologyRestoreFocus = "";
+                    for (var i = 0; i < parts.length; i++) {
+                        if (parts[i].indexOf("st-key-delete_col_") === 0
+                                || parts[i].indexOf("st-key-delete_val_") === 0) {
+                            window.__maptologyRestoreFocus = parts[i];
+                            break;
+                        }
+                    }
+                    next.focus({preventScroll: true});
+                    return;
+                }
+                window.__maptologyRestoreFocus = isColumn ? "mapped-heading" : "value-heading";
+                var heading = focusTarget(window.__maptologyRestoreFocus);
+                if (!heading) return;
+                heading.setAttribute("tabindex", "-1");
+                heading.focus({preventScroll: true});
+            }
+
+            var stepsWereHidden = document.body.classList.contains("maptology-no-ontologies");
+            new MutationObserver(function () {
+                var hidden = document.body.classList.contains("maptology-no-ontologies");
+                if (stepsWereHidden && !hidden)
+                    announce("Steps 5 and 6 are available.");
+                stepsWereHidden = hidden;
+            }).observe(document.body, {attributes: true, attributeFilter: ["class"]});
+
             document.addEventListener("mousedown", function (event) {
                 var button = event.target && event.target.closest
                     ? event.target.closest("button") : null;
                 if (!button) return;
-                if (!button.closest("[class*='st-key-delete_col_'], [class*='st-key-delete_val_']"))
-                    return;
-                // A focused button is scrolled into view. Skip the focus.
-                event.preventDefault();
+                var host = button.closest(
+                    "[class*='st-key-delete_col_'], [class*='st-key-delete_val_']");
+                if (!host) return;
+                var isColumn = (host.className || "").indexOf("st-key-delete_col_") >= 0;
+                // Remember the table position before the button takes focus.
+                // Focusing it can scroll the page; the hold puts it back.
+                holdTable(document.querySelector(isColumn
+                    ? ".st-key-mapped_terms_block"
+                    : ".st-key-value_mappings_block"));
             }, true);
 
             document.addEventListener("click", function (event) {
@@ -340,6 +559,8 @@ def _install_instant_mapping_delete():
                         : ".st-key-mapped_terms_block");
                     var empty = panel && panel.querySelector(".maptology-mapping-empty");
                     if (empty) empty.style.setProperty("display", "none", "important");
+                    var added = plainText(addHost).replace(/^(Add\\s*)+/, "");
+                    if (added) announce("Added " + added);
                     return;
                 }
 
@@ -365,7 +586,22 @@ def _install_instant_mapping_delete():
                 rememberDelete(colId
                     ? "st-key-delete_col_" + colId
                     : "st-key-delete_val_" + valId);
+                var row = host.closest(
+                    ".st-key-mapped_terms_rows > [data-testid='stLayoutWrapper'], .st-key-value_mappings_rows > [data-testid='stLayoutWrapper']");
+                var cells = row ? rowTexts(row) : [];
+                var message = "";
+                if (colId && cells.length >= 2)
+                    message = "Removed " + cells[1] + " from " + cells[0];
+                else if (cells.length >= 3)
+                    message = "Removed " + cells[2] + " from " + cells[1] + " in " + cells[0];
+                if (hidden && message)
+                    message += " It is back in the search results.";
+                announce(message);
+                placeFocusAfterDelete(row, button, !!colId);
             }, true);
+
+            labelControls();
+            markMappingTables();
         })();
         </script>
         """,
@@ -744,6 +980,17 @@ def add_css():
         margin-top: 10px;
         margin-bottom: 14px;
     }
+    .maptology-sr-only {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+    }
     /* Mapping lists stay on the page before the first row, so Step 6 and
        Step 7 do not jump when a mapping is added or the last one is removed. */
     .st-key-mapped_terms_block,
@@ -1076,6 +1323,12 @@ def _install_ontology_browser_filter():
             background: transparent;
             cursor: pointer;
             padding: 0.35rem 0.15rem;
+        }
+        .maptology-ont-select:focus-visible,
+        .maptology-ont-remove:focus-visible,
+        .maptology-ont-info:focus-visible {
+            outline: 2px solid #0068c9;
+            outline-offset: 2px;
         }
         .maptology-ont-details {
             margin: 0 0.15rem 0.75rem 0.15rem;

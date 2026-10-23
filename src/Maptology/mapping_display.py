@@ -1,3 +1,4 @@
+import html
 import streamlit as st
 import pandas as pd
 import urllib.parse
@@ -7,6 +8,15 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ct
 from mapping import remove_individual_value_mapping, remove_term_mapping
 from schema import generate_linkml_schema, generate_sssom_tsv, data_type_term
 from utils import get_column_data_type, column_supports_value_mapping, mapping_row_id
+
+
+def _new_tab_link(url, label):
+    """A link that tells assistive technology it opens in a new tab."""
+    return (
+        '<a href="%s" target="_blank" rel="noopener noreferrer">%s'
+        '<span class="maptology-sr-only"> (opens in a new tab)</span></a>'
+        % (html.escape(str(url), quote=True), html.escape(str(label)))
+    )
 
 
 def _ontology_term_id(uri):
@@ -249,19 +259,18 @@ def _has_value_mappings():
 def render_mapped_terms():
     _show_added_toast()
     with st.container(key="mapped_terms_block"):
-        st.markdown('<div class="sub-heading">Mapped Ontology Terms</div>', unsafe_allow_html=True)
+        st.markdown('<h4 class="sub-heading">Mapped Ontology Terms</h4>', unsafe_allow_html=True, anchors=False)
         # The note stays in the page while rows are showing, hidden by CSS, so
         # the last trash click can reveal it without waiting on a redraw.
         _mapping_placeholder(_COLUMN_EMPTY)
         if not st.session_state.mapped_terms:
             return
+        st.markdown("This table shows all the ontology terms you have mapped to your columns. You can view term details or remove mappings.")
         with st.container(key="mapped_terms_rows"):
             _render_mapped_terms_table()
 
 
 def _render_mapped_terms_table():
-    st.markdown("This table shows all the ontology terms you have mapped to your columns. You can view term details or remove mappings.")
-    
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([2.2, 2.6, 1.8, 2.4, 0.5])
     with header_col1:
         st.markdown("<strong>Column Name</strong>", unsafe_allow_html=True)
@@ -288,24 +297,25 @@ def _render_mapped_terms_table():
         ontology_abbr = mapping.get("Ontology Abbr", mapping["Ontology Name"].split(" ")[-1] if "(" in mapping["Ontology Name"] else mapping["Ontology Name"])
         with col2:
             preferred_label_url = f"https://bioportal.bioontology.org/ontologies/{ontology_abbr}?p=classes&conceptid={urllib.parse.quote(mapping['Ontology Term URI'], safe='')}"
-            st.markdown(f"""
-            <a href="{preferred_label_url}" target="_blank">{mapping['Preferred Label']}</a>
-            """, unsafe_allow_html=True)
+            st.markdown(_new_tab_link(preferred_label_url, mapping["Preferred Label"]), unsafe_allow_html=True)
 
         with col3:
             st.write(_ontology_term_id(mapping.get("Ontology Term URI", "")))
 
         with col4:
             ontology_url = f"https://bioportal.bioontology.org/ontologies/{ontology_abbr}"
-            st.markdown(f"""
-            <a href="{ontology_url}" target="_blank">{mapping['Ontology Name']}</a>
-            """, unsafe_allow_html=True)
+            st.markdown(_new_tab_link(ontology_url, mapping["Ontology Name"]), unsafe_allow_html=True)
         
         with col5:
             term_uri = mapping['Ontology Term URI']
             unique_key = "delete_col_" + mapping_row_id(column_name, term_uri)
-            st.button("🗑️", key=unique_key, on_click=remove_term_mapping,
-                      args=(column_name, term_uri))
+            st.button(
+                "🗑️",
+                key=unique_key,
+                help="Remove " + str(mapping["Preferred Label"]) + " from " + str(column_name),
+                on_click=remove_term_mapping,
+                args=(column_name, term_uri),
+            )
         
         st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
 
@@ -321,19 +331,18 @@ def render_value_mappings():
     if not column_supports_value_mapping():
         return
     with st.container(key="value_mappings_block"):
-        st.markdown('<div class="sub-heading">Unique Values\' Ontology Terms</div>', unsafe_allow_html=True)
+        st.markdown('<h4 class="sub-heading">Unique Values\' Ontology Terms</h4>', unsafe_allow_html=True, anchors=False)
         # Same as the column list: the note is already here, hidden while
         # rows exist, and comes back when the last value mapping is removed.
         _mapping_placeholder(_VALUE_EMPTY)
         if not _has_value_mappings():
             return
+        st.markdown("This table shows the ontology terms mapped to specific data values within your columns. Each row represents a value-to-term mapping that you have created.")
         with st.container(key="value_mappings_rows"):
             _render_value_mappings_table()
 
 
 def _render_value_mappings_table():
-    st.markdown("This table shows the ontology terms mapped to specific data values within your columns. Each row represents a value-to-term mapping that you have created.")
-    
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([1.8, 1.5, 3, 2.5, 0.5])
     with header_col1:
         st.markdown("<strong>Column</strong>", unsafe_allow_html=True)
@@ -364,23 +373,23 @@ def _render_value_mappings_table():
                     with col3:
                         ontology_abbr = val_mapping.get("Ontology Abbr", val_mapping["Ontology Name"].split(" ")[-1] if "(" in val_mapping["Ontology Name"] else val_mapping["Ontology Name"])
                         preferred_label_url = f"https://bioportal.bioontology.org/ontologies/{ontology_abbr}?p=classes&conceptid={urllib.parse.quote(val_mapping['Ontology Term URI'], safe='')}"
-                        st.markdown(f"""
-                        <a href="{preferred_label_url}" target="_blank">{val_mapping['Preferred Label']}</a>
-                        """, unsafe_allow_html=True)
+                        st.markdown(_new_tab_link(preferred_label_url, val_mapping["Preferred Label"]), unsafe_allow_html=True)
                     
                     with col4:
                         ontology_abbr = val_mapping.get("Ontology Abbr", val_mapping["Ontology Name"].split(" ")[-1] if "(" in val_mapping["Ontology Name"] else val_mapping["Ontology Name"])
                         ontology_url = f"https://bioportal.bioontology.org/ontologies/{ontology_abbr}"
-                        st.markdown(f"""
-                        <a href="{ontology_url}" target="_blank">{val_mapping['Ontology Name']}</a>
-                        """, unsafe_allow_html=True)
+                        st.markdown(_new_tab_link(ontology_url, val_mapping["Ontology Name"]), unsafe_allow_html=True)
                     
                     with col5:
                         term_uri = val_mapping['Ontology Term URI']
                         unique_key = "delete_val_" + mapping_row_id(column, value, term_uri)
-                        st.button("🗑️", key=unique_key,
-                                  on_click=remove_individual_value_mapping,
-                                  args=(column, value, term_uri))
+                        st.button(
+                            "🗑️",
+                            key=unique_key,
+                            help="Remove " + str(val_mapping["Preferred Label"]) + " from " + str(value) + " in " + str(column),
+                            on_click=remove_individual_value_mapping,
+                            args=(column, value, term_uri),
+                        )
                     
                     st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
                     mapping_idx += 1
@@ -396,23 +405,23 @@ def _render_value_mappings_table():
                 with col3:
                     ontology_abbr = val_mappings.get("Ontology Abbr", val_mappings["Ontology Name"].split(" ")[-1] if "(" in val_mappings["Ontology Name"] else val_mappings["Ontology Name"])
                     preferred_label_url = f"https://bioportal.bioontology.org/ontologies/{ontology_abbr}?p=classes&conceptid={urllib.parse.quote(val_mappings['Ontology Term URI'], safe='')}"
-                    st.markdown(f"""
-                    <a href="{preferred_label_url}" target="_blank">{val_mappings['Preferred Label']}</a>
-                    """, unsafe_allow_html=True)
+                    st.markdown(_new_tab_link(preferred_label_url, val_mappings["Preferred Label"]), unsafe_allow_html=True)
                 
                 with col4:
                     ontology_abbr = val_mappings.get("Ontology Abbr", val_mappings["Ontology Name"].split(" ")[-1] if "(" in val_mappings["Ontology Name"] else val_mappings["Ontology Name"])
                     ontology_url = f"https://bioportal.bioontology.org/ontologies/{ontology_abbr}"
-                    st.markdown(f"""
-                    <a href="{ontology_url}" target="_blank">{val_mappings['Ontology Name']}</a>
-                    """, unsafe_allow_html=True)
+                    st.markdown(_new_tab_link(ontology_url, val_mappings["Ontology Name"]), unsafe_allow_html=True)
                 
                 with col5:
                     term_uri = val_mappings['Ontology Term URI']
                     unique_key = "delete_val_" + mapping_row_id(column, value, term_uri)
-                    st.button("🗑️", key=unique_key,
-                              on_click=remove_individual_value_mapping,
-                              args=(column, value, term_uri))
+                    st.button(
+                        "🗑️",
+                        key=unique_key,
+                        help="Remove " + str(val_mappings["Preferred Label"]) + " from " + str(value) + " in " + str(column),
+                        on_click=remove_individual_value_mapping,
+                        args=(column, value, term_uri),
+                    )
                 
                 st.markdown("<hr style='margin: 0.5em 0; border-color: #eee;'>", unsafe_allow_html=True)
                 mapping_idx += 1

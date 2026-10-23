@@ -57,6 +57,7 @@ def _render_value_checklist(df, key_prefix, column, value):
         with st.container(horizontal=True, vertical_alignment="center",
                           key=row_key):
             st.button("Add", key="add_" + base,
+                      help="Add " + str(row["Preferred Label"]) + " from " + str(row["Ontology Name"]),
                       on_click=confirm_added_value_term,
                       args=(column, value, _search_row_payload(row)))
             st.markdown(str(row["Preferred Label"]) + "  —  "
@@ -122,7 +123,7 @@ def _render_step6():
     unique_values = sorted(df[selected_col].dropna().unique(), key=str)
 
     if len(unique_values) > 0:
-        st.markdown('<div class="sub-heading">Select a unique value from column \'' + selected_col + '\' to map to an ontology term</div>', unsafe_allow_html=True)
+        st.markdown('<h4 class="sub-heading">Select a unique value from column \'' + selected_col + '\' to map to an ontology term</h4>', unsafe_allow_html=True, anchors=False)
 
         # EVERY unique value has to be reachable: the exported mapping file
         # documents each one, so a value the dropdown never offers can never
@@ -171,7 +172,7 @@ def _render_step6():
 
         if has_auto_results:
             selected_value = st.session_state.selected_unique_value
-            st.markdown('<div class="sub-heading">Select ontology terms for value: \'' + str(selected_value) + '\'</div>', unsafe_allow_html=True)
+            st.markdown('<h4 class="sub-heading">Select ontology terms for value: \'' + str(selected_value) + '\'</h4>', unsafe_allow_html=True, anchors=False)
 
             # Full-width list. Term details open in a popover (ℹ️), same as
             # the ontology lists.
@@ -212,7 +213,7 @@ def _render_step6():
                     manual_df = manual_df[~manual_df['Ontology Term URI'].isin(auto_uris)]
                 manual_df = manual_df.drop_duplicates(subset=['Ontology Term URI'], keep='first').head(10)
 
-                st.markdown('<div class="sub-heading">Search Results</div>', unsafe_allow_html=True)
+                st.markdown('<h4 class="sub-heading">Search Results</h4>', unsafe_allow_html=True, anchors=False)
                 if len(manual_df) > 0:
                     with st.container(height=300):
                         _render_value_checklist(

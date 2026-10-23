@@ -57,7 +57,12 @@ def render_term_info_popover(info, key):
 
     Same control as the ontology lists: a tertiary ℹ️ that opens a popover.
     """
-    with st.popover("ℹ️", type="tertiary", key=key):
+    with st.popover(
+        "ℹ️",
+        type="tertiary",
+        key=key,
+        help="View description of " + str(info.get("pref_label") or "this term"),
+    ):
         _render_term_details(info)
 
 

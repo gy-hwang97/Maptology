@@ -59,6 +59,7 @@ def _render_term_checklist(df, key_prefix, column):
         with st.container(horizontal=True, vertical_alignment="center",
                           key=row_key):
             st.button("Add", key="add_" + base,
+                      help="Add " + str(row["Preferred Label"]) + " from " + str(row["Ontology Name"]),
                       on_click=confirm_added_column_term,
                       args=(column, _search_row_payload(row)))
             st.markdown(str(row["Preferred Label"]) + "  —  "
@@ -141,7 +142,7 @@ def _render_step5():
             st.session_state.selected_column = selected_column
 
             # ========== Select Data Type section ==========
-            st.markdown('<div class="sub-heading">Select data type</div>', unsafe_allow_html=True)
+            st.markdown('<h4 class="sub-heading">Select data type</h4>', unsafe_allow_html=True, anchors=False)
 
             df = st.session_state.uploaded_df
 
@@ -181,7 +182,7 @@ def _render_step5():
             has_auto = (st.session_state.filtered_ontology_results is not None
                         and len(st.session_state.filtered_ontology_results) > 0)
 
-            st.markdown('<div class="sub-heading">Select ontology terms</div>', unsafe_allow_html=True)
+            st.markdown('<h4 class="sub-heading">Select ontology terms</h4>', unsafe_allow_html=True, anchors=False)
             st.markdown("Maptology attempts to automatically suggest ontology terms for your column. If you like one of these suggestions, click on the Add button next to it. (To read more about an ontology term, click on the ℹ️ icon at the right of that row. If none of the suggestions are useful (or none are provided), you can search for more terms.")
 
             # Full-width list. Term details open in a popover (ℹ️), same as the
@@ -226,7 +227,7 @@ def _render_step5():
                         manual_df = manual_df[~manual_df['Ontology Term URI'].isin(auto_uris)]
                     manual_df = manual_df.drop_duplicates(subset=['Ontology Term URI'], keep='first').head(10)
 
-                    st.markdown('<div class="sub-heading">Search Results</div>', unsafe_allow_html=True)
+                    st.markdown('<h4 class="sub-heading">Search Results</h4>', unsafe_allow_html=True, anchors=False)
                     if len(manual_df) > 0:
                         with st.container(height=300):
                             st.write("Click Add next to any term from the search results:")
