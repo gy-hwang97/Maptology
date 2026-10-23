@@ -5,10 +5,26 @@ Replaces BioPortal API calls with local precomputed TF-IDF search.
 
 import os
 import pickle
+import queue
+import threading
 import ormsgpack
 import pandas as pd
-from scipy import sparse
-from sklearn.metrics.pairwise import linear_kernel
+
+# scipy and scikit-learn take several seconds to import. They are loaded on
+# the first search or the background index warm-up, not while the page is
+# opening.
+_sparse = None
+_linear_kernel = None
+
+
+def _search_libs():
+    global _sparse, _linear_kernel
+    if _linear_kernel is None:
+        from scipy import sparse as sparse_mod
+        from sklearn.metrics.pairwise import linear_kernel as kernel
+        _sparse = sparse_mod
+        _linear_kernel = kernel
+    return _sparse, _linear_kernel
 
 
 # Path settings. Resolved against the repo root (this file lives in
@@ -61,6 +77,23 @@ def get_ontology_list_from_tsv():
 # ============================================================
 
 _loaded_ontologies = {}
+# One lock per acronym so a search and the background warm-up share a single
+# read instead of loading the same files twice.
+_load_locks_guard = threading.Lock()
+_load_locks = {}
+_preload_guard = threading.Lock()
+_preload_queued = set()
+_preload_queue = queue.PriorityQueue()
+_preload_started = False
+
+
+def _load_lock(acronym):
+    with _load_locks_guard:
+        lock = _load_locks.get(acronym)
+        if lock is None:
+            lock = threading.Lock()
+            _load_locks[acronym] = lock
+        return lock
 
 
 def _load_ontology_data(acronym):
@@ -68,6 +101,11 @@ def _load_ontology_data(acronym):
     Load precomputed TF-IDF files for one ontology.
     Uses an in-memory cache so we don't reload the same files.
     """
+    with _load_lock(acronym):
+        return _load_ontology_data_locked(acronym)
+
+
+def _load_ontology_data_locked(acronym):
     # Check if already loaded
     if acronym in _loaded_ontologies:
         return _loaded_ontologies[acronym]
@@ -92,6 +130,7 @@ def _load_ontology_data(acronym):
     if not os.path.exists(terms_path):
         return None
 
+    sparse, _kernel = _search_libs()
     # Load TF-IDF matrix
     tfidf_matrix = sparse.load_npz(matrix_path)
 
@@ -120,6 +159,72 @@ def _load_ontology_data(acronym):
     _loaded_ontologies[acronym] = data
 
     return data
+
+
+def _matrix_bytes(acronym):
+    """File size of the index, used to warm small ontologies first."""
+    path = os.path.join(CACHE_DIR, acronym, acronym + "_tfidf_matrix.npz")
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def _downloaded_acronyms():
+    """Acronyms that already have a TF-IDF index on disk."""
+    if not os.path.isdir(CACHE_DIR):
+        return []
+    found = []
+    for name in os.listdir(CACHE_DIR):
+        if name.endswith(".bak"):
+            continue
+        matrix = os.path.join(CACHE_DIR, name, name + "_tfidf_matrix.npz")
+        if os.path.isfile(matrix):
+            found.append(name)
+    return found
+
+
+def _preload_worker():
+    while True:
+        _size, acronym = _preload_queue.get()
+        try:
+            _load_ontology_data(acronym)
+        except Exception as e:
+            print("Could not load the %s index (%s: %s)."
+                  % (acronym, type(e).__name__, e), flush=True)
+        finally:
+            _preload_queue.task_done()
+
+
+def preload_downloaded_ontologies():
+    """Read downloaded indexes into memory on a background thread.
+
+    Not started when the page opens. Loading every index at once uses enough
+    memory to slow the keyword search, and a large index still has to be read
+    when that ontology is actually selected.
+    """
+    global _preload_started
+    if _preload_started:
+        return
+    acronyms = _downloaded_acronyms()
+    if not acronyms:
+        return
+    with _preload_guard:
+        if not _preload_started:
+            _preload_started = True
+            threading.Thread(target=_preload_worker, daemon=True,
+                             name="maptology-index-preload").start()
+        fresh = []
+        for acronym in acronyms:
+            if acronym in _preload_queued or acronym in _loaded_ontologies:
+                continue
+            _preload_queued.add(acronym)
+            fresh.append(acronym)
+    for acronym in sorted(fresh, key=_matrix_bytes):
+        _preload_queue.put((_matrix_bytes(acronym), acronym))
+    if fresh:
+        print("Loading %d ontology indexes in the background so Step 5 can "
+              "open without waiting on disk." % len(fresh), flush=True)
 
 
 # ============================================================
@@ -169,6 +274,7 @@ def search_local(search_term, selected_ontologies, top_n=10):
             Ontology URI, Ontology Term URI
         Returns None if no results found.
     """
+    _sparse, linear_kernel = _search_libs()
     if not search_term:
         return None
 

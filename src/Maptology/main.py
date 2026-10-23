@@ -1,22 +1,31 @@
 import csv
 import io
+import urllib.parse
 
 import streamlit as st
-import pandas as pd
 
-from utils import initialize_session, add_css
-from components import render_header, FAVICON_PATH
-from ontology_setup import ensure_ontologies
-from ontology import render_ontology_selection, get_available_ontologies, search_ontology
-from column_mapping import render_column_mapping_section
-from value_mapping import render_value_mapping_section
-from mapping_display import render_mapped_terms, render_value_mappings, render_download_buttons
-from mapping_import import render_import_section
+from components import FAVICON_PATH
+from ontology_setup import ensure_ontologies, startup_finished
 
 # One page of the preview is sent to the browser. The rest of a large file
 # stays on the server until the user moves to it.
 PREVIEW_PAGE_ROWS = 20
 PREVIEW_PAGE_COLS = 20
+
+
+def _browser_is_localhost(url=None):
+    """True when the page was opened on this computer.
+
+    localhost, 127.0.0.1, and ::1 stay on the machine that is running
+    Maptology. Any other address is another computer, so the upload note
+    belongs on the page.
+    """
+    if url is None:
+        url = st.context.url
+    if not url:
+        return False
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return host in ("localhost", "127.0.0.1", "::1")
 
 
 def _header_label(name):
@@ -102,7 +111,7 @@ def _show_repeated_column_message(repeated):
         lines.append("- " + _column_name_code(label) + " appears " + str(count) + " times")
     st.error(
         "This file was not opened because some columns have the same name. "
-        "Each column needs a name of its own.\n\n" + "\n".join(lines))
+        "Each column name must be unique. Please rename the columns and upload the file again.\n\n" + "\n".join(lines))
 
 
 def _shift_preview_page(axis, delta):
@@ -174,12 +183,31 @@ def _render_data_preview(df):
         st.markdown("Column '" + highlight + "' highlighted due to recent type change")
 
 
-# Streamlit basic page configuration
+# Streamlit basic page configuration. This has to be the first Streamlit
+# command, and it has to come before the slow imports below.
 st.set_page_config(page_title='Maptology', page_icon=FAVICON_PATH, layout='wide')
 
-# Download and index any ontologies that are new or updated on BioPortal, before
-# the UI renders. Cached per server process, so this is startup work rather than
-# something that repeats on every rerun. Progress is printed to the terminal.
+# The first visit only paints this note and comes straight back. Importing the
+# search libraries and checking the ontology files happens on that next run,
+# while this note stays up, so the window is not blank.
+if not startup_finished() and not st.session_state.get("_maptology_loading_shown"):
+    st.session_state._maptology_loading_shown = True
+    st.info("Maptology is loading. Please wait...")
+    st.rerun()
+
+import pandas as pd
+
+from utils import initialize_session, add_css
+from components import render_header
+from ontology import render_ontology_selection, get_available_ontologies, search_ontology
+from column_mapping import render_column_mapping_section
+from value_mapping import render_value_mapping_section
+from mapping_display import render_download_buttons, render_mapped_terms, render_value_mappings
+from mapping_import import render_import_section
+
+# Ontology files that still have to be downloaded or indexed finish before the
+# page is drawn. A BioPortal check that is not about to fetch files runs after
+# the page opens. Cached per server process; later reruns skip it.
 ensure_ontologies()
 
 # Add CSS styles
@@ -200,14 +228,18 @@ render_header()
 
 # Tagline
 # st.markdown("### Map your tabular dataset to ontology terms")
-st.markdown("Maptology helps researchers semantically annotate tabular data with ontology terms. After uploading a data file (CSV, TSV, or Excel formats), a researcher selects from the hundreds of ontologies available in [BioPortal](https://bioportal.bioontology.org/). Then, for each column, they can assign ontology term(s) describing the data in that column. Similarly, for each value in a columns with categorical data, they can assign ontology term(s) describing the meaning of that value. The resulting annotations can be downloaded as a [LinkML](https://linkml.io/) or [SSSOM](https://github.com/mapping-commons/sssom) file, which can be shared with others alongside the data file, thus providing a rich description of the data. Upload a file below to get started!")
+st.markdown("Maptology helps researchers semantically annotate tabular data with ontology terms. After uploading a data file (CSV, TSV, or Excel format), a researcher selects from the hundreds of ontologies available in [BioPortal](https://bioportal.bioontology.org/). Then, for each column, they can assign ontology term(s) describing the data in that column. Similarly, for each value in a column with categorical data, they can assign ontology term(s) describing the meaning of that value. The resulting annotations can be downloaded as a [LinkML](https://linkml.io/) and/or [SSSOM](https://github.com/mapping-commons/sssom) files, thus providing rich descriptions of the data. Upload a file below to get started!")
 
 # =============================================================================
 # Step 1: File Upload (no API key needed)
 # =============================================================================
 
-st.write("### Step 1: Upload Data File")
-st.markdown("Please click on the gray box below and then select a file to upload. The file must be in CSV, TSV, or Excel format. All of the column names should be unique.")
+st.markdown("### Step 1: Upload Data File", anchors=False)
+_step1 = ("Please click on the gray box below and then select a file to upload. "
+          "It must be in CSV, TSV, or Excel format. All of the column names should be unique.")
+if not _browser_is_localhost():
+    _step1 += (" Your file will be kept in short-term memory for this session only and will be discarded when you close the page.")
+st.markdown(_step1)
 # A stable key keeps the uploaded file across reruns. Without it, adding other
 # widgets/sections can shift this keyless widget's identity and Streamlit resets
 # its value to None on a rerun (which would wipe the whole session).
@@ -289,7 +321,7 @@ if uploaded_file:
         st.error("Error processing file: " + str(e))
         st.stop()
 
-    st.write("### Step 2: Preview Data")
+    st.markdown("### Step 2: Preview Data", anchors=False)
     st.markdown("This table shows your data so you can check that it was read correctly. "
                 "A large file is shown one page at a time.")
     _render_data_preview(df)
@@ -313,27 +345,25 @@ if uploaded_file:
 
     # Step 4: select / add the ontologies to search. Any ontology auto-selected by
     # the import above is already checked here.
-    st.write("### Step 4: Select Ontologies")
+    st.markdown("### Step 4: Select Ontologies", anchors=False)
 
     # st.success("Loaded " + str(len(available_ontologies)) + " ontologies")
     render_ontology_selection(available_ontologies)
 
     # Steps 5 and 6 stay mounted so selecting or removing an ontology can
-    # refresh them without redrawing the page above. Each one draws nothing
-    # until there is something to map.
+    # refresh them without redrawing the page above. The mapping lists stay
+    # on the page too, with a short note until the first term is added.
+    # Column mappings are listed at the bottom of Step 5, and value mappings
+    # at the bottom of Step 6.
     render_column_mapping_section()
+    render_mapped_terms()
     render_value_mapping_section()
+    render_value_mappings()
 
-    # Results tables and downloads - shown whenever mappings exist, whether
-    # they came from a search or from an imported file.
-    if st.session_state.mapped_terms:
-        render_mapped_terms()
-
-    if st.session_state.value_ontology_mapping:
-        render_value_mappings()
-
-    if st.session_state.mapped_terms or st.session_state.value_ontology_mapping:
-        render_download_buttons()
+    # Step 7 exports column mappings from Step 5 and value mappings from
+    # Step 6, including mappings that came from an imported file. It stays
+    # mounted so a delete can refresh the files without redrawing this page.
+    render_download_buttons()
 
 else:
     # Reset when file is removed

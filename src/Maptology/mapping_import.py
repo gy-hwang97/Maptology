@@ -524,7 +524,7 @@ def render_import_section():
     if st.session_state.uploaded_df is None:
         return
 
-    st.write("### Step 3: Import Existing Mappings (Optional)")
+    st.markdown("### Step 3: Import Existing Mappings (Optional)", anchors=False)
     st.markdown(
         "If you previously exported a mapping file from Maptology (LinkML .yaml "
         "or SSSOM .tsv), you can import it here and work from the previous mappings. Only mappings that align with the current data file are retained. This step is optional; you can skip it and begin mapping terms below."

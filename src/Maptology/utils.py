@@ -1,3 +1,4 @@
+import hashlib
 import inspect
 
 import streamlit as st
@@ -7,6 +8,12 @@ from dateutil import parser as date_parser
 
 # BioPortal API is no longer used (local TF-IDF search only) / BioPortal API 더 이상 사용 안 함
 API_KEY = ""
+
+def mapping_row_id(*parts):
+    """Stable id shared by a mapped-term row and the trash button that removes it."""
+    raw = "\n".join(str(part) for part in parts)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
 
 # 세션 상태 초기화 / Initialize session state
 def initialize_session():
@@ -120,6 +127,252 @@ def get_api_key():
     return st.session_state.get('api_key', None)
 
 # CSS 스타일 추가 / Add CSS styles
+def _install_instant_mapping_delete():
+    """Update a search row in the browser as soon as Add or trash is clicked.
+
+    The server still records the change. Add hides that search row immediately.
+    Trash hides the mapping at the click and shows the search row again so the
+    term can be added back. The table is held on the screen, so that search
+    row does not push the page. The hide is a stylesheet rule for that mapping's
+    own button key. Streamlit redraws the row before the server result arrives
+    and would drop a class added on the element, which made the row flash back.
+    The key class is Streamlit's and stays until that mapping is gone. The rule
+    is not applied to the row element, because Streamlit reuses that element
+    for the next mapping. Deleting the last row also hides the divider above
+    it, which would otherwise sit at the bottom until the table redraws.
+    """
+    st.html(
+        """
+        <script>
+        (function () {
+            if (window.__maptologyTrashV9) return;
+            window.__maptologyTrashV9 = true;
+
+            var pending = Object.create(null);
+            var styleEl = null;
+
+            function ensureStyle() {
+                if (styleEl && styleEl.isConnected) return styleEl;
+                styleEl = document.getElementById("maptology-pending-delete-style");
+                if (!styleEl) {
+                    styleEl = document.createElement("style");
+                    styleEl.id = "maptology-pending-delete-style";
+                    document.head.appendChild(styleEl);
+                }
+                return styleEl;
+            }
+
+            function rebuildPending() {
+                var css = "";
+                for (var key in pending) {
+                    var sel = "." + key;
+                    css +=
+                        ".st-key-mapped_terms_rows > [data-testid=\\"stLayoutWrapper\\"]:has(" + sel + ")," +
+                        ".st-key-value_mappings_rows > [data-testid=\\"stLayoutWrapper\\"]:has(" + sel + ")," +
+                        ".st-key-mapped_terms_rows > [data-testid=\\"stLayoutWrapper\\"]:has(" + sel + ") + [data-testid=\\"stElementContainer\\"]," +
+                        ".st-key-value_mappings_rows > [data-testid=\\"stLayoutWrapper\\"]:has(" + sel + ") + [data-testid=\\"stElementContainer\\"]" +
+                        "{display:none !important;}";
+                    /* The divider above the last row becomes the bottom line
+                       once that row is hidden. Hide it with the row. A middle
+                       row is not followed by the table's last element, so its
+                       divider stays. */
+                    css +=
+                        ".st-key-mapped_terms_rows > [data-testid=\\"stElementContainer\\"]:has(+ [data-testid=\\"stLayoutWrapper\\"] " + sel + "):has(+ [data-testid=\\"stLayoutWrapper\\"] + [data-testid=\\"stElementContainer\\"]:last-child)," +
+                        ".st-key-value_mappings_rows > [data-testid=\\"stElementContainer\\"]:has(+ [data-testid=\\"stLayoutWrapper\\"] " + sel + "):has(+ [data-testid=\\"stLayoutWrapper\\"] + [data-testid=\\"stElementContainer\\"]:last-child)" +
+                        "{display:none !important;}";
+                }
+                ensureStyle().textContent = css;
+            }
+
+            function rememberDelete(keyClass) {
+                pending[keyClass] = true;
+                rebuildPending();
+            }
+
+            function prunePending() {
+                var app = document.querySelector("[data-testid='stApp']");
+                var script = app && app.getAttribute("data-test-script-state");
+                if (script && script !== "notRunning" && script !== "initial") return;
+                var changed = false;
+                for (var key in pending) {
+                    if (!document.querySelector("." + key)) {
+                        delete pending[key];
+                        changed = true;
+                    }
+                }
+                if (changed) rebuildPending();
+            }
+
+            new MutationObserver(prunePending).observe(document.documentElement, {
+                subtree: true,
+                childList: true,
+                attributes: true,
+                attributeFilter: ["class", "data-test-script-state"]
+            });
+
+            function keySuffix(el, prefix) {
+                var cls = el.className;
+                if (!cls || typeof cls !== "string") return "";
+                var parts = cls.split(/\\s+/);
+                for (var i = 0; i < parts.length; i++) {
+                    if (parts[i].indexOf(prefix) === 0)
+                        return parts[i].slice(prefix.length);
+                }
+                return "";
+            }
+
+            function rowShell(block) {
+                var wrap = block;
+                while (wrap.parentElement && wrap.parentElement !== document.body) {
+                    var testid = wrap.getAttribute("data-testid") || "";
+                    if (testid === "stElementContainer" || testid === "stLayoutWrapper")
+                        break;
+                    wrap = wrap.parentElement;
+                }
+                return wrap;
+            }
+
+            function isHidden(el, stop) {
+                var node = el;
+                while (node && node !== stop) {
+                    if (window.getComputedStyle(node).display === "none") return true;
+                    node = node.parentElement;
+                }
+                return false;
+            }
+
+            function searchRoot(from) {
+                var node = from.parentElement;
+                while (node && node !== document.body) {
+                    if (node.querySelector(":scope > .stElementContainer .maptology-all-mapped, :scope .maptology-all-mapped"))
+                        return node;
+                    node = node.parentElement;
+                }
+                return null;
+            }
+
+            function showSearchRow(hidden) {
+                hidden.style.setProperty("display", "flex", "important");
+                var rowWrap = hidden.parentElement;
+                if (rowWrap && rowWrap.getAttribute("data-testid") === "stLayoutWrapper")
+                    rowWrap.style.setProperty("display", "flex", "important");
+                var node = hidden.parentElement;
+                while (node && node !== document.body) {
+                    var note = node.querySelector(".maptology-all-mapped");
+                    if (note) {
+                        note.hidden = true;
+                        note.style.setProperty("display", "none", "important");
+                        break;
+                    }
+                    node = node.parentElement;
+                }
+            }
+
+            // Keep the table on the same part of the screen. Showing the
+            // search row again, and Streamlit scrolling the focused button,
+            // would otherwise shift the page.
+            function holdTable(anchor) {
+                var main = document.querySelector(".stMain");
+                if (!main || !anchor) return;
+                var top = anchor.getBoundingClientRect().top;
+                var until = Date.now() + 1500;
+                var user = false;
+                function release() { user = true; }
+                document.addEventListener("wheel", release, {capture: true, passive: true, once: true});
+                document.addEventListener("touchmove", release, {capture: true, passive: true, once: true});
+                function tick() {
+                    if (user || Date.now() > until || !anchor.isConnected) return;
+                    var drift = anchor.getBoundingClientRect().top - top;
+                    if (Math.abs(drift) > 1) {
+                        main.scrollTop += drift;
+                        var saved = window.__maptologyScrollLock;
+                        if (saved && !saved.user) {
+                            saved.main = main.scrollTop;
+                            saved.win = window.scrollY || 0;
+                        }
+                    }
+                    requestAnimationFrame(tick);
+                }
+                requestAnimationFrame(tick);
+            }
+
+            document.addEventListener("mousedown", function (event) {
+                var button = event.target && event.target.closest
+                    ? event.target.closest("button") : null;
+                if (!button) return;
+                if (!button.closest("[class*='st-key-delete_col_'], [class*='st-key-delete_val_']"))
+                    return;
+                // A focused button is scrolled into view. Skip the focus.
+                event.preventDefault();
+            }, true);
+
+            document.addEventListener("click", function (event) {
+                var button = event.target && event.target.closest
+                    ? event.target.closest("button") : null;
+                if (!button) return;
+
+                var addHost = button.closest(
+                    "[class*='st-key-term_row_c_'], [class*='st-key-term_row_v_']");
+                var addLabel = (button.innerText || "").replace(/\\s+/g, " ").trim();
+                if (addHost && addLabel === "Add") {
+                    var shell = rowShell(addHost);
+                    shell.style.setProperty("display", "none", "important");
+                    var root = searchRoot(addHost);
+                    if (root) {
+                        var rows = root.querySelectorAll(
+                            "[class*='st-key-term_row_c_'], [class*='st-key-term_row_v_'], [class*='st-key-term_row_mapped_']");
+                        var any = false;
+                        for (var i = 0; i < rows.length; i++) {
+                            if (shell.contains(rows[i])) continue;
+                            if (!isHidden(rows[i], root)) { any = true; break; }
+                        }
+                        if (!any) {
+                            var done = root.querySelector(".maptology-all-mapped");
+                            if (done) {
+                                done.hidden = false;
+                                done.style.setProperty("display", "block", "important");
+                            }
+                        }
+                    }
+                    var isValue = (addHost.className || "").indexOf("st-key-term_row_v_") >= 0;
+                    var panel = document.querySelector(isValue
+                        ? ".st-key-value_mappings_block"
+                        : ".st-key-mapped_terms_block");
+                    var empty = panel && panel.querySelector(".maptology-mapping-empty");
+                    if (empty) empty.style.setProperty("display", "none", "important");
+                    return;
+                }
+
+                var host = button.closest(
+                    "[class*='st-key-delete_col_'], [class*='st-key-delete_val_']");
+                if (!host) return;
+                var colId = keySuffix(host, "st-key-delete_col_");
+                var valId = keySuffix(host, "st-key-delete_val_");
+                var id = colId || valId;
+                if (!id) return;
+                holdTable(document.querySelector(colId
+                    ? ".st-key-mapped_terms_block"
+                    : ".st-key-value_mappings_block"));
+                var prefixes = colId
+                    ? ["st-key-term_row_mapped_c_", "st-key-term_row_c_"]
+                    : ["st-key-term_row_mapped_v_", "st-key-term_row_v_"];
+                var hidden = null;
+                for (var p = 0; p < prefixes.length; p++) {
+                    hidden = document.querySelector("[class*='" + prefixes[p] + id + "']");
+                    if (hidden) break;
+                }
+                if (hidden) showSearchRow(hidden);
+                rememberDelete(colId
+                    ? "st-key-delete_col_" + colId
+                    : "st-key-delete_val_" + valId);
+            }, true);
+        })();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
+
+
 def add_css():
     st.markdown("""
     <style>
@@ -228,8 +481,8 @@ def add_css():
         font-size: 20px;
         overflow-wrap: anywhere;
     }
-    /* A dialog and a popover body render outside .stMain, so the same three
-       sizes and the same black text have to be stated for them as well. */
+    /* A dialog and a popover body render outside .stMain, so the same sizes
+       have to be stated for them as well. */
     [data-testid="stDialog"] p,
     [data-testid="stDialog"] span,
     [data-testid="stDialog"] label,
@@ -251,32 +504,60 @@ def add_css():
     [data-testid="stDialog"] h3 {
         font-size: 28px !important;
     }
-    [data-testid="stDialog"] p,
-    [data-testid="stDialog"] span,
-    [data-testid="stDialog"] label,
-    [data-testid="stDialog"] li,
-    [data-testid="stDialog"] td,
-    [data-testid="stDialog"] th,
-    [data-testid="stPopoverBody"] p,
-    [data-testid="stPopoverBody"] span,
-    [data-testid="stPopoverBody"] li {
-        color: #000000 !important;
-    }
-    /* Black text throughout - Streamlit greys out captions and help text -
-       leaving only links blue. */
+    /* Body copy is a dark gray. Headings stay black, and the rules below
+       put black back on the spans Streamlit nests inside those headings. */
     .stMain p,
     .stMain span,
     .stMain label,
     .stMain li,
     .stMain td,
-    .stMain th,
-    .stMain h1,
-    .stMain h2,
-    .stMain h3,
     [data-testid="stMarkdownContainer"],
     [data-testid="stCaptionContainer"],
     [data-testid="stCaptionContainer"] p,
-    .stCaption p {
+    [data-testid="stCaptionContainer"] *,
+    .stCaption p,
+    [data-testid="stDialog"] p,
+    [data-testid="stDialog"] span,
+    [data-testid="stDialog"] label,
+    [data-testid="stDialog"] li,
+    [data-testid="stDialog"] td,
+    [data-testid="stPopoverBody"] p,
+    [data-testid="stPopoverBody"] span,
+    [data-testid="stPopoverBody"] li,
+    [data-testid="stTable"] td {
+        color: #3c4450 !important;
+    }
+    .stMain h1,
+    .stMain h1 *,
+    .stMain h2,
+    .stMain h2 *,
+    .stMain h3,
+    .stMain h3 *,
+    [data-testid="stDialog"] h1,
+    [data-testid="stDialog"] h1 *,
+    [data-testid="stDialog"] h2,
+    [data-testid="stDialog"] h2 *,
+    [data-testid="stDialog"] h3,
+    [data-testid="stDialog"] h3 *,
+    .sub-heading,
+    .sub-heading *,
+    .st-key-column_select [data-testid="stWidgetLabel"],
+    .st-key-column_select [data-testid="stWidgetLabel"] *,
+    .section-header,
+    .term-label,
+    .selection-summary,
+    .stMain th,
+    [data-testid="stDialog"] th,
+    [data-testid="stTable"] th {
+        color: #000000 !important;
+    }
+    /* Button labels sit in the same markdown nodes as body text. */
+    .stMain button,
+    .stMain button *,
+    [data-testid="stDialog"] button,
+    [data-testid="stDialog"] button *,
+    [data-testid="stPopoverBody"] button,
+    [data-testid="stPopoverBody"] button * {
         color: #000000 !important;
     }
     .stMain a,
@@ -293,41 +574,55 @@ def add_css():
     [data-testid="stPopoverButton"] svg {
         display: none !important;
     }
-    /* An ontology row is a horizontal flex line. The name is sized to one
-       full line, so a long name drops onto the next row as a whole. Keep it
-       beside the button and wrap the rest of the text. */
-    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] {
-        flex-wrap: nowrap !important;
+    /* Download rows and term-search rows match Select ontologies: the name
+       fills the middle of the line, and the info icon sits on the right edge. */
+    /* A mapped term stays in the search list, hidden, so deleting it can
+       show that row again without redrawing the list. Hide the row's
+       layout wrapper, not only the row: a zero-height flex item still
+       takes the list's gap, which stacks blank space above the terms. */
+    [class*="st-key-term_row_mapped_c_"],
+    [class*="st-key-term_row_mapped_v_"],
+    [data-testid="stLayoutWrapper"]:has(> [class*="st-key-term_row_mapped_c_"]),
+    [data-testid="stLayoutWrapper"]:has(> [class*="st-key-term_row_mapped_v_"]) {
+        display: none !important;
     }
-    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"]) {
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"],
+    [data-testid="stHorizontalBlock"][class*="st-key-term_row_"] {
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stElementContainer"]:has([data-testid="stButton"]):not(:has([data-testid="stPopover"])),
+    [data-testid="stHorizontalBlock"][class*="st-key-term_row_"] > [data-testid="stElementContainer"]:has([data-testid="stButton"]):not(:has([data-testid="stPopover"])) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"]),
+    [data-testid="stHorizontalBlock"][class*="st-key-term_row_"] > [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"]) {
         min-width: 0 !important;
         width: auto !important;
         max-width: 100% !important;
-        flex: 0 1 auto !important;
+        flex: 1 1 auto !important;
     }
-    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] [data-testid="stMarkdownContainer"] p {
+    [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stHorizontalBlock"][class*="st-key-term_row_"] [data-testid="stMarkdownContainer"] p {
         overflow-wrap: break-word;
     }
-    /* The row gap is 1rem. Pull only the info control halfway back toward
-       the name, and leave the gap before the name as it is. */
     [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stLayoutWrapper"]:has([data-testid="stPopover"]),
     [data-testid="stHorizontalBlock"][class*="st-key-ont_name_"] > [data-testid="stElementContainer"]:has([data-testid="stPopover"]),
+    [data-testid="stHorizontalBlock"][class*="st-key-term_row_"] > [data-testid="stLayoutWrapper"]:has([data-testid="stPopover"]),
+    [data-testid="stHorizontalBlock"][class*="st-key-term_row_"] > [data-testid="stElementContainer"]:has([data-testid="stPopover"]),
     [class*="st-key-info_"] {
-        margin-left: -0.5rem !important;
+        margin-left: auto !important;
+        flex: 0 0 auto !important;
     }
-    /* Anything nested inside a caption stays black too. */
-    [data-testid="stCaptionContainer"] * {
-        color: #000000 !important;
-    }
-    /* st.table renders a real HTML table, so the body font and colour reach
-       it; let a wide one scroll rather than overflow the page. */
+    /* st.table renders a real HTML table, so the body font reaches it; let
+       a wide one scroll rather than overflow the page. */
     [data-testid="stTable"] {
         overflow-x: auto;
     }
     [data-testid="stTable"] td,
     [data-testid="stTable"] th {
         font-size: 20px !important;
-        color: #000000 !important;
     }
     /* The data preview's hover toolbar (columns, download, search, fullscreen)
        pops up over the table and covers the header. The preview is the only
@@ -356,12 +651,10 @@ def add_css():
     }
     .term-label {
         font-weight: bold;
-        color: #000000;
         margin-bottom: 4px;
     }
     .term-definition {
         font-style: italic;
-        color: #000000;
         margin-top: 4px;
     }
     div[data-testid="stDataFrame"] > div {
@@ -410,7 +703,6 @@ def add_css():
         border-radius: 5px;
         margin-bottom: 10px;
         font-weight: bold;
-        color: #000000;
     }
     .section-purple { border-left: 5px solid #9370DB; }
     .section-red { border-left: 5px solid #FF6B6B; }
@@ -433,7 +725,7 @@ def add_css():
     .multiple-selections-box {
         border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin: 10px 0; background-color: #f9f9f9;
     }
-    .selection-summary { font-weight: bold; margin-bottom: 8px; color: #000000; }
+    .selection-summary { font-weight: bold; margin-bottom: 8px; }
     .section-green { border-left: 5px solid #4CAF50; }
     .stFileUploader button[kind="icon"] { display: none !important; }
     .stFileUploader button[kind="secondary"] { display: none !important; }
@@ -452,6 +744,55 @@ def add_css():
         margin-top: 10px;
         margin-bottom: 14px;
     }
+    /* Mapping lists stay on the page before the first row, so Step 6 and
+       Step 7 do not jump when a mapping is added or the last one is removed. */
+    .st-key-mapped_terms_block,
+    .st-key-value_mappings_block {
+        background-color: #e7f2fa;
+        border: 1px solid #d3e4f2;
+        border-left: 4px solid #4682B4;
+        border-radius: 8px;
+        padding: 0.35rem 1rem 0.85rem;
+        margin-top: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+    .st-key-mapped_terms_block hr,
+    .st-key-value_mappings_block hr {
+        border-color: #d5e3ee !important;
+    }
+    /* A divider follows every data row. The one after the last row sits on
+       the bottom edge of the panel, so it is left out. */
+    .st-key-mapped_terms_rows > [data-testid="stElementContainer"]:last-child:has(hr),
+    .st-key-value_mappings_rows > [data-testid="stElementContainer"]:last-child:has(hr) {
+        display: none !important;
+    }
+    /* The empty note sits in a markdown block whose bottom margin is
+       negative, so the panel padding does not show under that sentence.
+       This restores the same space below the note as above the heading. */
+    .st-key-mapped_terms_block:has(.maptology-mapping-empty):not(:has(.st-key-mapped_terms_rows)),
+    .st-key-value_mappings_block:has(.maptology-mapping-empty):not(:has(.st-key-value_mappings_rows)) {
+        padding-bottom: 30px;
+    }
+    /* The note is drawn with the rows so the last delete can reveal it.
+       Hide it while the table is on the page. */
+    .st-key-mapped_terms_block:has(.st-key-mapped_terms_rows) .maptology-mapping-empty,
+    .st-key-value_mappings_block:has(.st-key-value_mappings_rows) .maptology-mapping-empty {
+        display: none !important;
+    }
+    .maptology-mapping-empty {
+        margin: 0.15rem 0 0.35rem;
+        color: #3c4d5c;
+    }
+    /* Same pale red as an error alert. Used when Step 6 does not apply. */
+    .maptology-step-na {
+        box-sizing: border-box;
+        width: 100%;
+        margin: 0.75rem 0 1.25rem;
+        padding: 20px;
+        border-radius: 10px;
+        background-color: rgba(255, 43, 43, 0.1);
+        line-height: 1.4;
+    }
     /* "Select a column" sits above the Step 5 dropdown. Same italic treatment
        as the sub-headings, without changing the column names in the menu. */
     .st-key-column_select [data-testid="stWidgetLabel"],
@@ -459,8 +800,8 @@ def add_css():
         font-style: italic !important;
         font-weight: normal !important;
     }
-    /* Button labels live in a markdown container whose text is forced black,
-       which hides Streamlit's faded disabled color. Download, Previous, and
+    /* Button labels are forced black above, which hides Streamlit's faded
+       disabled color. Download, Previous, and
        Next should read as unavailable when they cannot be used. The preview
        pagers use the same treatment: Previous is faded on the first page and
        Next is faded on the last page. */
@@ -508,14 +849,15 @@ def add_css():
     }
     /* Ontology column values are rendered as DISABLED tertiary buttons (only to
        align them on the same row as the checkbox / ℹ️). Show their text in the
-       normal text color instead of the faded 'disabled' grey, so they match the
-       Term column values. Only disabled tertiary buttons are affected. */
+       same dark gray as other body text instead of the faded 'disabled' grey,
+       so they match the Term column values. Only disabled tertiary buttons
+       are affected. */
     button[kind="tertiary"]:disabled,
     button[kind="tertiary"]:disabled *,
     [data-testid="stBaseButton-tertiary"]:disabled,
     [data-testid="stBaseButton-tertiary"]:disabled * {
-        color: #000000 !important;
-        -webkit-text-fill-color: #000000 !important;
+        color: #3c4450 !important;
+        -webkit-text-fill-color: #3c4450 !important;
         opacity: 1 !important;
         cursor: default !important;
     }
@@ -537,6 +879,7 @@ def add_css():
     # every row and only catches up after several characters have been typed.
     _install_ontology_browser_filter()
     _install_info_button_no_tooltip()
+    _install_instant_mapping_delete()
 
 
 # A filter or keyword search starts at this many characters. An empty box
@@ -657,8 +1000,48 @@ def _install_ontology_browser_filter():
         }
         body.maptology-no-ontologies .st-key-step5_block,
         body.maptology-no-ontologies .st-key-step6_block,
+        body.maptology-no-ontologies .st-key-mapped_terms_block,
+        body.maptology-no-ontologies .st-key-value_mappings_block,
         [data-testid="stElementContainer"]:has(.maptology-sel-block[hidden]) {
             display: none !important;
+        }
+        /* Shown while a newly selected ontology is read into memory. It sits
+           on the page itself, so the fade Streamlit puts on Step 5 does not
+           dim it. */
+        .maptology-ont-loading-note {
+            display: none;
+        }
+        body.maptology-ont-loading .maptology-ont-loading-note {
+            display: flex;
+            position: fixed;
+            z-index: 1000000;
+            top: 4.75rem;
+            left: 50%;
+            transform: translateX(-50%);
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.8rem 1.2rem;
+            background: #ffffff;
+            color: #000000;
+            border: 1px solid rgba(49, 51, 63, 0.18);
+            border-radius: 0.6rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+            font-family: Calibri, Arial, sans-serif;
+            font-size: 20px;
+            line-height: 1.3;
+            white-space: nowrap;
+        }
+        .maptology-ont-loading-spin {
+            width: 1.15rem;
+            height: 1.15rem;
+            border: 3px solid rgba(0, 0, 0, 0.18);
+            border-top-color: #000000;
+            border-radius: 50%;
+            animation: maptology-ont-spin 0.7s linear infinite;
+            flex: 0 0 auto;
+        }
+        @keyframes maptology-ont-spin {
+            to { transform: rotate(360deg); }
         }
         .maptology-ont-row {
             display: flex;
@@ -730,8 +1113,8 @@ def _install_ontology_browser_filter():
         <div class="maptology-ont-filter"></div>
         <script>
         (function () {
-            if (window.__maptologyOntFilterV13) return;
-            window.__maptologyOntFilterV13 = true;
+            if (window.__maptologyOntFilterV14) return;
+            window.__maptologyOntFilterV14 = true;
 
             var PLACEHOLDER = "Type to filter available ontologies...";
 
@@ -794,7 +1177,8 @@ def _install_ontology_browser_filter():
                             scroller = parent;
                     }
                 }
-                if (scroller && query) scroller.scrollTop = 0;
+                if (scroller && (query || resetScroll)) scroller.scrollTop = 0;
+                resetScroll = false;
                 var empty = document.querySelector(".maptology-ont-filter-empty");
                 if (!empty) return;
                 var show = query && rows.length && shown === 0;
@@ -824,6 +1208,71 @@ def _install_ontology_browser_filter():
                 if (!node || node.getAttribute("placeholder") !== PLACEHOLDER) return;
                 apply();
             }, true);
+
+            // Set just before a cleared value is applied, so the full list
+            // starts at the top instead of a position from the old filter.
+            var resetScroll = false;
+            // "now": the list stays put, so the cursor only needs a moment.
+            // "redraw": an update rebuilds the box later; focus that new box.
+            var refocusUntil = 0;
+
+            // Select clears a filter that had text and leaves the cursor in
+            // the box. An empty box is left alone.
+            window.__maptologyClearOntologyFilter = function (waitForRedraw) {
+                var box = filterInput();
+                if (!box || !String(box.value || "").trim()) {
+                    window.__maptologyRefocusFilter = "";
+                    return false;
+                }
+                // The live-query helper would otherwise press Enter for the
+                // now-empty value and redraw this list. The selection request
+                // already records that the filter is empty.
+                box.dataset.maptologyApplied = "";
+                resetScroll = true;
+                var setter = Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype, "value").set;
+                setter.call(box, "");
+                box.dispatchEvent(new Event("input", {bubbles: true}));
+                window.__maptologyRefocusFilter = waitForRedraw ? "redraw" : "now";
+                refocusUntil = Date.now() + 1000;
+                focusClearedFilter();
+                return true;
+            };
+
+            function focusClearedFilter() {
+                var mode = window.__maptologyRefocusFilter;
+                if (mode !== "now" && mode !== "redraw") return;
+                var box = filterInput();
+                if (!box || !box.isConnected) return;
+                var marker = document.querySelector(".maptology-ont-filter-focus");
+                var token = marker ? (marker.getAttribute("data-token") || "") : "";
+                var markerPending = !!(marker && token
+                    && marker.getAttribute("data-done") !== token);
+                var inWindow = Date.now() <= refocusUntil;
+                if (mode === "now" && !inWindow) {
+                    window.__maptologyRefocusFilter = "";
+                    return;
+                }
+                // A long ontology update must not keep pulling the cursor back.
+                // The rebuilt box carries the marker; focus that once.
+                if (mode === "redraw" && !markerPending && !inWindow) return;
+                var active = document.activeElement;
+                // A hidden request box can take focus when the selection is
+                // recorded. That is not the user typing somewhere else.
+                if (active && active !== box && active.tagName === "INPUT"
+                        && active.offsetParent !== null) {
+                    window.__maptologyRefocusFilter = "";
+                    return;
+                }
+                if (active !== box) {
+                    box.focus({preventScroll: true});
+                    try { box.setSelectionRange(0, 0); } catch (err) {}
+                }
+                if (mode === "redraw" && markerPending) {
+                    marker.setAttribute("data-done", token);
+                    window.__maptologyRefocusFilter = "";
+                }
+            }
 
             // After Select, the rerun leaves a marker. If the filter box
             // already has text, put the cursor back there so typing can
@@ -879,9 +1328,11 @@ def _install_ontology_browser_filter():
                     var input = filterInput();
                     if (input && input.value) apply();
                     focusFilterIfRequested();
+                    focusClearedFilter();
                 });
             }).observe(document.body, {childList: true, subtree: true});
             focusFilterIfRequested();
+            focusClearedFilter();
         })();
         </script>
         """,
@@ -1067,6 +1518,31 @@ def get_column_data_type(column_name):
     if st.session_state.uploaded_df is not None and column_name in st.session_state.uploaded_df.columns:
         return detect_column_type(st.session_state.uploaded_df, column_name)
     return "String"
+
+
+def column_supports_value_mapping(column_name=None):
+    """True when Step 6 can map individual values for this column.
+
+    String is always allowed, including when the user sets a numeric column
+    to String. Date, time, and number types are not.
+    """
+    if column_name is None:
+        column_name = st.session_state.get("selected_column")
+    df = st.session_state.get("uploaded_df")
+    if not column_name or df is None or column_name not in df.columns:
+        return True
+    user_type = get_column_data_type(column_name)
+    is_valid, _error = validate_type_change(column_name, user_type)
+    if not is_valid:
+        return False
+    if user_type == "String":
+        return True
+    if user_type in ("Date", "Datetime", "Time"):
+        return False
+    dtype_name = str(df[column_name].dtype)
+    return (dtype_name in ("object", "str")
+            or dtype_name.startswith("string")
+            or dtype_name == "category")
 
 # 데이터 타입 변경 유효성 검사 함수 / Validate data type change
 def validate_type_change(column_name, new_type):

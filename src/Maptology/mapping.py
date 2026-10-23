@@ -71,11 +71,39 @@ def is_column_term_mapped(column, term_uri):
     )
 
 
+def _search_row_payload(row):
+    """The search fields Add needs, as plain values a button callback can keep."""
+    payload = {}
+    for key in ("Preferred Label", "Ontology Name", "Ontology URI",
+                "Ontology Term URI", "Definition"):
+        try:
+            value = row[key]
+        except (KeyError, IndexError, TypeError):
+            value = ""
+        if value is None or (isinstance(value, float) and value != value):
+            value = ""
+        elif not isinstance(value, str):
+            value = str(value)
+        payload[key] = value
+    return payload
+
+
 def add_column_term(column, row):
     # No _bump_version() here: this is called on a direct checkbox toggle (which
     # already reran) AND from the external paths (which bump themselves).
     if not is_column_term_mapped(column, row["Ontology Term URI"]):
         st.session_state.mapped_terms.append(_column_entry_from_row(column, row))
+
+
+def confirm_added_column_term(column, row):
+    """Add one column term and refresh only the mapping table and downloads.
+
+    The search list stays as it is. The browser hides that row on the click,
+    so the page does not redraw the ontology list or the search results.
+    """
+    add_column_term(column, row)
+    st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
+    st.rerun(scope=["mapped_terms_table", "download_results"])
 
 
 def remove_column_term(column, term_uri):
@@ -114,6 +142,13 @@ def add_value_term(column, value, row):
     existing.append(_value_entry_from_row(column, row))
     vom[column][value] = existing
     # No _bump_version() here (direct toggle path); external callers bump.
+
+
+def confirm_added_value_term(column, value, row):
+    """Add one value term and refresh only the value table and downloads."""
+    add_value_term(column, value, row)
+    st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
+    st.rerun(scope=["value_mappings_table", "download_results"])
 
 
 def remove_value_term(column, value, term_uri):
@@ -166,7 +201,9 @@ def remove_term_mapping(column_name, term_uri):
     if column_name and term_uri:
         remove_column_term(column_name, term_uri)
         _bump_version()
-        st.rerun()
+        # Refresh only the small table and the download buttons, not the
+        # search lists. The table redraw removes this one row.
+        st.rerun(scope=["mapped_terms_table", "download_results"])
 
 
 def remove_individual_value_mapping(column_name, value, term_uri):
@@ -174,7 +211,9 @@ def remove_individual_value_mapping(column_name, value, term_uri):
     if column_name and value and term_uri:
         remove_value_term(column_name, value, term_uri)
         _bump_version()
-        st.rerun()
+        # Refresh only the small table and the download buttons, not the
+        # search lists. The table redraw removes this one row.
+        st.rerun(scope=["value_mappings_table", "download_results"])
 
 
 # =============================================================================
@@ -200,6 +239,10 @@ def on_column_select():
     st.session_state.manual_value_search_results = None
     st.session_state.manual_column_search_query = ""
     st.session_state.manual_value_search_query = ""
+    # The boxes keep their own text. Clearing the query alone leaves what
+    # was typed, and the next run would search for it again.
+    st.session_state.manual_column_search = ""
+    st.session_state.manual_value_search = ""
 
     if selected_column and st.session_state.selected_ontologies:
         from ontology import search_ontology, search_ontology_for_value
@@ -219,6 +262,19 @@ def on_column_select():
                     st.session_state.selected_unique_value = default_value
                     search_ontology_for_value(default_value)
                     st.session_state.auto_searched = True
+
+    # Step 6 and its mapping list follow the column. A keyed rerun replaces
+    # the default, so the column search has to be named here too.
+    st.rerun(scope=["column_mapping", "value_mapping", "value_mappings_table"])
+
+
+def on_column_dtype_change():
+    """Keep Step 6 in step with the data type chosen above it."""
+    column = st.session_state.get("selected_column")
+    if column:
+        st.session_state.column_data_types[column] = st.session_state.get(
+            "col_info_dtype_" + str(column))
+    st.rerun(scope=["column_mapping", "value_mapping", "value_mappings_table"])
 
 
 def on_value_select():

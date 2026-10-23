@@ -6,13 +6,26 @@ import pandas as pd
 import io
 from utils import get_column_data_type
 
-try:
-    from sssom.util import MappingSetDataFrame
-    from sssom.writers import write_tsv as sssom_write_tsv
-    from curies import Converter
-    SSSOM_AVAILABLE = True
-except ImportError:
-    SSSOM_AVAILABLE = False
+# sssom and curies take a few seconds to import, and a download is the only
+# thing that needs them. Loaded on that click, not while the page is opening.
+_sssom_libs = None
+
+
+def _load_sssom():
+    global _sssom_libs
+    if _sssom_libs is False:
+        return None
+    if _sssom_libs is not None:
+        return _sssom_libs
+    try:
+        from sssom.util import MappingSetDataFrame
+        from sssom.writers import write_tsv as sssom_write_tsv
+        from curies import Converter
+    except ImportError:
+        _sssom_libs = False
+        return None
+    _sssom_libs = (MappingSetDataFrame, sssom_write_tsv, Converter)
+    return _sssom_libs
 
 # Resolved against the repo root (this file lives in src/Maptology/) rather than
 # the current working directory, so the file is found no matter which directory
@@ -413,9 +426,11 @@ def download_linkml_schema():
 
 # SSSOM TSV 생성 함수 / Generate SSSOM TSV
 def generate_sssom_tsv():
-    if not SSSOM_AVAILABLE:
+    sssom_libs = _load_sssom()
+    if sssom_libs is None:
         st.warning("SSSOM package is not installed. Run: pip install sssom curies")
         return None
+    MappingSetDataFrame, sssom_write_tsv, Converter = sssom_libs
 
     has_column_mappings = bool(st.session_state.mapped_terms)
     has_value_mappings = bool(st.session_state.value_ontology_mapping)

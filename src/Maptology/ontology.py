@@ -903,6 +903,9 @@ def _on_ontology_select_request():
     if raw.startswith("update:"):
         acronym = raw.split("#", 1)[0][len("update:"):].strip()
         if acronym and _accept_ontology_selection(acronym, available):
+            # The browser already cleared the filter box. Keep that empty
+            # value for the next time the box is drawn.
+            st.session_state.ontology_filter = ""
             st.session_state.ontologies_changed = True
             _rerun_mapping_views()
         return
@@ -912,6 +915,7 @@ def _on_ontology_select_request():
     if valid == list(selected):
         return
     selected[:] = valid
+    st.session_state.ontology_filter = ""
     st.session_state.ontologies_changed = True
     _rerun_mapping_views()
 
@@ -977,13 +981,16 @@ def _available_ontology_list_html(available, at_limit, selected_count):
         """
         <script>
         (function () {
-            if (window.__maptologyOntSelectV8) return;
-            window.__maptologyOntSelectV8 = true;
-            var MAX_SELECTED = """ + str(MAX_SELECTED_ONTOLOGIES) + """;
+            // Steps 5 and 6 are hidden until an ontology is chosen. This has
+            // to run on every redraw: an imported mapping selects ontologies
+            // on the server, and the listener below is installed only once.
             if (""" + str(int(selected_count)) + """ > 0)
                 document.body.classList.remove("maptology-no-ontologies");
             else
                 document.body.classList.add("maptology-no-ontologies");
+            if (window.__maptologyOntSelectV11) return;
+            window.__maptologyOntSelectV11 = true;
+            var MAX_SELECTED = """ + str(MAX_SELECTED_ONTOLOGIES) + """;
 
             function requestInput() {
                 return document.querySelector(
@@ -1102,9 +1109,58 @@ def _available_ontology_list_html(available, at_limit, selected_count):
                 return row;
             }
 
+            function ensureLoadingNote() {
+                if (document.querySelector(".maptology-ont-loading-note")) return;
+                var note = document.createElement("div");
+                note.className = "maptology-ont-loading-note";
+                note.setAttribute("role", "status");
+                note.setAttribute("aria-live", "polite");
+                var spin = document.createElement("span");
+                spin.className = "maptology-ont-loading-spin";
+                spin.setAttribute("aria-hidden", "true");
+                var text = document.createElement("span");
+                text.textContent = "Please wait...";
+                note.appendChild(spin);
+                note.appendChild(text);
+                document.body.appendChild(note);
+            }
+
+            // Step 5 fades while the new ontology is read. The note stays
+            // fully visible for that wait, and comes down when the run ends.
+            function showOntologyLoading() {
+                ensureLoadingNote();
+                if (window.__maptologyOntLoadWatch) return;
+                window.__maptologyOntLoadWatch = true;
+                var sawRunning = false;
+                var revealed = false;
+                var started = Date.now();
+                var timer = setInterval(function () {
+                    var app = document.querySelector('[data-testid="stApp"]');
+                    var state = app
+                        ? (app.getAttribute("data-test-script-state") || "") : "";
+                    var running = state === "running" || state === "rerunRequested";
+                    if (running) sawRunning = true;
+                    if (sawRunning && !revealed && Date.now() - started >= 400) {
+                        document.body.classList.add("maptology-ont-loading");
+                        revealed = true;
+                    }
+                    var finished = sawRunning
+                        && (state === "notRunning" || state === "initial");
+                    var gaveUp = !sawRunning && Date.now() - started > 3000;
+                    if (finished || gaveUp) {
+                        clearInterval(timer);
+                        window.__maptologyOntLoadWatch = false;
+                        document.body.classList.remove("maptology-ont-loading");
+                    }
+                }, 100);
+            }
+
             function syncSelection(prefix) {
                 var input = requestInput();
-                if (!input) return;
+                // The choice list is on the page before the box that records
+                // it. Posting with no list would send an empty selection and
+                // the first click would be thrown away.
+                if (!input || !document.querySelector(".maptology-sel-list")) return false;
                 rememberScroll();
                 var rows = document.querySelectorAll(".maptology-sel-list .maptology-sel-row");
                 var ids = [];
@@ -1122,6 +1178,7 @@ def _available_ontology_list_html(available, at_limit, selected_count):
                     key: "Enter", code: "Enter", keyCode: 13, which: 13,
                     bubbles: true, cancelable: true
                 }));
+                return true;
             }
 
             function setSelectedCount(count) {
@@ -1249,6 +1306,84 @@ def _available_ontology_list_html(available, at_limit, selected_count):
                 syncSelection("");
             }, true);
 
+            // The Select buttons are drawn before the box that records the
+            // choice and before the Selected list. A click in that gap used
+            // to be dropped, and the finished page showed nothing selected.
+            var wanted = [];
+            var postedSignature = "";
+            var pendingUpdate = "";
+
+            function rowByAcronym(acronym) {
+                var rows = document.querySelectorAll(".maptology-ont-row");
+                for (var i = 0; i < rows.length; i++) {
+                    if ((rows[i].getAttribute("data-acronym") || "") === acronym)
+                        return rows[i];
+                }
+                return null;
+            }
+
+            function flushPendingUpdate() {
+                if (!pendingUpdate) return;
+                var input = requestInput();
+                if (!input) return;
+                var row = rowByAcronym(pendingUpdate);
+                var button = row ? row.querySelector("button") : null;
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = "Updating...";
+                }
+                if (window.__maptologyClearOntologyFilter)
+                    window.__maptologyClearOntologyFilter(true);
+                rememberScroll();
+                var seq = (window.__maptologyOntSeq || 0) + 1;
+                window.__maptologyOntSeq = seq;
+                var setter = Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype, "value").set;
+                setter.call(input, "update:" + pendingUpdate + "#" + seq);
+                input.dispatchEvent(new Event("input", {bubbles: true}));
+                input.dispatchEvent(new KeyboardEvent("keydown", {
+                    key: "Enter", code: "Enter", keyCode: 13, which: 13,
+                    bubbles: true, cancelable: true
+                }));
+                pendingUpdate = "";
+            }
+
+            function flushPendingAdds() {
+                if (!wanted.length) return;
+                var host = document.querySelector(".maptology-sel-list");
+                if (!requestInput() || !host) return;
+                var moved = false;
+                for (var i = 0; i < wanted.length; i++) {
+                    var row = rowByAcronym(wanted[i]);
+                    if (!row || host.contains(row)) continue;
+                    if (window.__maptologyClearOntologyFilter)
+                        window.__maptologyClearOntologyFilter(false);
+                    showSelected(row);
+                    moved = true;
+                }
+                var ids = [];
+                var selectedRows = host.querySelectorAll(".maptology-sel-row");
+                for (var j = 0; j < selectedRows.length; j++) {
+                    var id = selectedRows[j].getAttribute("data-acronym") || "";
+                    if (id) ids.push(id);
+                }
+                for (var k = 0; k < wanted.length; k++) {
+                    if (ids.indexOf(wanted[k]) === -1) return;
+                }
+                var signature = ids.join(",");
+                if (signature !== postedSignature) {
+                    if (syncSelection("")) {
+                        postedSignature = signature;
+                        showOntologyLoading();
+                    }
+                    return;
+                }
+                // The row stayed put after the server was told. A rebuild
+                // that puts it back in Available leaves this list in place
+                // so the next pass can select it again.
+                if (!moved) wanted = [];
+            }
+
             document.addEventListener("click", function (event) {
                 var info = event.target.closest(".maptology-ont-info");
                 if (info) {
@@ -1268,25 +1403,12 @@ def _available_ontology_list_html(available, at_limit, selected_count):
                 var acronym = row.getAttribute("data-acronym") || "";
                 if (!acronym) return;
                 if (row.getAttribute("data-update") === "1") {
-                    button.disabled = true;
-                    button.textContent = "Updating...";
-                    var seq = (window.__maptologyOntSeq || 0) + 1;
-                    window.__maptologyOntSeq = seq;
-                    var input = requestInput();
-                    if (!input) return;
-                    rememberScroll();
-                    var setter = Object.getOwnPropertyDescriptor(
-                        window.HTMLInputElement.prototype, "value").set;
-                    setter.call(input, "update:" + acronym + "#" + seq);
-                    input.dispatchEvent(new Event("input", {bubbles: true}));
-                    input.dispatchEvent(new KeyboardEvent("keydown", {
-                        key: "Enter", code: "Enter", keyCode: 13, which: 13,
-                        bubbles: true, cancelable: true
-                    }));
+                    pendingUpdate = acronym;
+                    flushPendingUpdate();
                     return;
                 }
-                showSelected(row);
-                syncSelection("");
+                if (wanted.indexOf(acronym) === -1) wanted.push(acronym);
+                flushPendingAdds();
             }, true);
 
             enforceLimit();
@@ -1298,6 +1420,8 @@ def _available_ontology_list_html(available, at_limit, selected_count):
             }
 
             new MutationObserver(function () {
+                flushPendingAdds();
+                flushPendingUpdate();
                 revealHeading();
                 var acronym = window.__maptologyOntSelectBusy;
                 if (!acronym) return;
@@ -1364,8 +1488,8 @@ def _render_available_ontologies(available_ontologies):
         placeholder="Type to filter available ontologies...",
         label_visibility="collapsed",
         key="ontology_filter")
-    # The browser filter watches for this marker after a successful Select.
-    # It focuses the box above only when that box already has text.
+    # The browser filter watches for this marker after a Select that rebuilds
+    # the list. It puts the cursor back in the box when that box had text.
     token = st.session_state.pop("focus_ontology_filter", None)
     if token:
         st.html(

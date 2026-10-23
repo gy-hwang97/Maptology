@@ -9,9 +9,10 @@ from ontology import (
 )
 from mapping import (
     on_column_select,
+    on_column_dtype_change,
     is_column_term_mapped,
-    add_column_term,
-    remove_column_term,
+    confirm_added_column_term,
+    _search_row_payload,
 )
 from components import render_term_info_popover
 from utils import (
@@ -21,6 +22,7 @@ from utils import (
     validate_type_change,
     live_query,
     live_text_input,
+    mapping_row_id,
 )
 
 
@@ -32,22 +34,33 @@ def _render_term_checklist(df, key_prefix, column):
     mapping (the single source of truth) and confirms with a small toast."""
     # The same IRI can appear under more than one ontology; keep one row per URI.
     df = df.drop_duplicates(subset=["Ontology Term URI"], keep="first").reset_index(drop=True)
-    # Hide terms already added, so Add never re-adds one that is already mapped.
-    keep = [not is_column_term_mapped(column, u) for u in df["Ontology Term URI"]]
-    df = df[keep].reset_index(drop=True)
     if len(df) == 0:
         st.markdown("Every matching term has been added. Remove one from the "
                    "table below to add it again.")
         return
 
+    # Mapped terms stay in the list, hidden. Deleting one shows that row
+    # again without redrawing this search.
+    shown = 0
     for i in range(len(df)):
         row = df.iloc[i]
         term_uri = row["Ontology Term URI"]
         term_key = hashlib.sha1(str(term_uri).encode("utf-8")).hexdigest()[:16]
         base = key_prefix + "__" + str(column) + "__" + term_key
-        # Add button beside the term and its ontology, packed left; details last.
-        with st.container(horizontal=True, vertical_alignment="center"):
-            add_clicked = st.button("Add", key="add_" + base)
+        mapped = is_column_term_mapped(column, term_uri)
+        if not mapped:
+            shown += 1
+        # The id is on every row, mapped or not, so a later trash click can
+        # show this row again without redrawing the search.
+        row_id = mapping_row_id(column, term_uri)
+        row_key = ("term_row_mapped_c_" if mapped else "term_row_c_") + row_id
+        # Add button and the term on the left. The info icon is pinned to the
+        # right edge of the row, same as Select ontologies.
+        with st.container(horizontal=True, vertical_alignment="center",
+                          key=row_key):
+            st.button("Add", key="add_" + base,
+                      on_click=confirm_added_column_term,
+                      args=(column, _search_row_payload(row)))
             st.markdown(str(row["Preferred Label"]) + "  —  "
                         + str(row["Ontology Name"]))
             ontology_info = get_ontology_details(row["Ontology Name"])
@@ -59,10 +72,14 @@ def _render_term_checklist(df, key_prefix, column):
                 "term_uri": row["Ontology Term URI"],
                 "synonyms": row.get("Synonyms", []),
             }, "info_" + base)
-        if add_clicked:
-            add_column_term(column, row)
-            st.session_state.term_added_toast = "Added: " + str(row["Preferred Label"])
-            st.rerun()
+    # Kept in the list even while some terms are still showing, so the last
+    # Add can reveal it without redrawing the search.
+    st.markdown(
+        '<p class="maptology-all-mapped"'
+        + ("" if shown == 0 else " hidden")
+        + ">Every matching term has been added. "
+        "Remove one from the table below to add it again.</p>",
+        unsafe_allow_html=True)
 
 
 def _sync_column_search_state():
@@ -107,7 +124,7 @@ def render_column_mapping_section():
 
 
 def _render_step5():
-    st.write("### Step 5: Map Ontology Terms for Columns")
+    st.markdown("### Step 5: Map Ontology Terms for Columns", anchors=False)
     st.markdown("Now that you have selected one or more ontologies, it is time to search for ontology term(s) for each column and map them. Start by selecting a column name from the dropdown below. The data type of the column will be inferred from the data, but you can change it if you would like. If you change it, be sure to choose a data type that is compatible with the data in the column. Any column can be a string, but other data types are only available for columns with compatible data.")
 
     if st.session_state.uploaded_df is not None:
@@ -140,6 +157,7 @@ def _render_step5():
                 dtype_options,
                 index=default_index,
                 key="col_info_dtype_" + selected_column,
+                on_change=on_column_dtype_change,
                 label_visibility="collapsed"
             )
 
@@ -164,13 +182,12 @@ def _render_step5():
                         and len(st.session_state.filtered_ontology_results) > 0)
 
             st.markdown('<div class="sub-heading">Select ontology terms</div>', unsafe_allow_html=True)
-            st.markdown("Maptology attempts to automatically suggest ontology terms for your column. If you like one of these suggestions, click on the Add button next to it. (To read more about an ontology term, click on the ℹ️ icon next to the term name. If none of the suggestions are useful (or none are provided), you can search for more terms.")
+            st.markdown("Maptology attempts to automatically suggest ontology terms for your column. If you like one of these suggestions, click on the Add button next to it. (To read more about an ontology term, click on the ℹ️ icon at the right of that row. If none of the suggestions are useful (or none are provided), you can search for more terms.")
 
             # Full-width list. Term details open in a popover (ℹ️), same as the
             # ontology lists, so the list can use the whole width.
             if has_auto:
                 with st.container(height=300):
-                    st.write("Click Add next to any term that matches your column:")
                     _render_term_checklist(
                         st.session_state.filtered_ontology_results,
                         "col_auto",
