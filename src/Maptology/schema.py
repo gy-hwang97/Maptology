@@ -65,6 +65,64 @@ def data_type_from_term(term):
     return ""
 
 
+def export_column_names():
+    """Every column the exports should describe.
+
+    The uploaded table comes first, in its own order, so a column with no
+    ontology term is still included. Columns that appear only in a mapping
+    follow, for a file that no longer matches the table exactly.
+    """
+    names = []
+    seen = set()
+
+    def add(name):
+        name = str(name)
+        if not name or name in seen:
+            return
+        seen.add(name)
+        names.append(name)
+
+    df = st.session_state.get("uploaded_df")
+    if df is not None:
+        for column in df.columns:
+            add(column)
+    for mapping in st.session_state.get("mapped_terms") or []:
+        add(mapping.get("Original Label", ""))
+    for column in st.session_state.get("value_ontology_mapping") or {}:
+        add(column)
+    return names
+
+
+def _data_type_annotations(column_name):
+    """LinkML annotations that record a column's basic data type."""
+    data_type = get_column_data_type(column_name)
+    _label, dt_uri = data_type_term(data_type)
+    return data_type, dtype_to_range(data_type), {
+        "data_type": {"tag": "data_type", "value": data_type},
+        "data_type_term": {"tag": "data_type_term", "value": dt_uri},
+    }
+
+
+def _value_mapping_notes(column_name):
+    """Comments and term URIs for the values mapped in one column."""
+    comments = []
+    uris = []
+    value_dict = (st.session_state.get("value_ontology_mapping") or {}).get(column_name) or {}
+    for value, val_mappings in value_dict.items():
+        iterable = val_mappings if isinstance(val_mappings, list) else [val_mappings]
+        for val_mapping in iterable:
+            if not isinstance(val_mapping, dict) or "Preferred Label" not in val_mapping:
+                continue
+            comments.append(
+                "Value '%s' maps to: %s (%s)"
+                % (value, val_mapping["Preferred Label"], val_mapping.get("Ontology Term URI", ""))
+            )
+            uri = val_mapping.get("Ontology Term URI", "")
+            if uri and uri not in uris:
+                uris.append(uri)
+    return comments, uris
+
+
 # Convert a friendly data type to a LinkML range
 def dtype_to_range(data_type):
     """Convert a Data Type string to a LinkML range value."""
@@ -113,135 +171,51 @@ def generate_linkml_schema():
         "slots": {}
     }
     
-    # Group by column
     column_mappings = {}
     for mapping in st.session_state.mapped_terms:
-        column_name = mapping["Original Label"]
-        if column_name not in column_mappings:
-            column_mappings[column_name] = []
-        column_mappings[column_name].append(mapping)
-    
-    # Create the main class
+        column_mappings.setdefault(mapping["Original Label"], []).append(mapping)
+
+    # One attribute per column. A column with no ontology term still records
+    # its schema.org data type. title keeps the original column name so
+    # re-import can match it.
     main_class = {
         "name": "DataMapping",
-        "description": "A data mapping with multiple ontology terms",
+        "description": "A data mapping to ontology term(s)",
         "attributes": {}
     }
-    
-    # Add the grouped mappings as attributes
-    for column_name, mappings in column_mappings.items():
+
+    for column_name in export_column_names():
         safe_column_name = column_name.replace(" ", "_").replace("-", "_").lower()
-        
-        # Get the current data type from the DataFrame
-        data_type = get_column_data_type(column_name)
-        range_value = dtype_to_range(data_type)
-        
-        # Collect the ontology URIs (for exact_mappings)
+        _data_type, range_value, annotations = _data_type_annotations(column_name)
+        mappings = column_mappings.get(column_name, [])
         exact_mapping_uris = []
         for mapping in mappings:
             uri = mapping.get("Ontology Term URI", "")
             if uri and uri not in exact_mapping_uris:
                 exact_mapping_uris.append(uri)
-        
-        # Attribute definition - only standard LinkML fields
-        # title = original column name (case/whitespace preserved). Used for re-import matching
-        dt_label, dt_uri = data_type_term(data_type)
+        value_comments, value_uris = _value_mapping_notes(column_name)
+        # Column terms are the exact mappings. A column that only has value
+        # terms uses those URIs.
+        if not exact_mapping_uris:
+            exact_mapping_uris = value_uris
+        if mappings:
+            description = "Mapping for column: " + column_name
+        elif value_comments:
+            description = "Value mapping for column: " + column_name
+        else:
+            description = "Column: " + column_name
         attribute_def = {
             "name": safe_column_name,
             "title": column_name,
-            "description": f"Mapping for column: {column_name}",
+            "description": description,
             "range": range_value,
-            "annotations": {
-                "data_type": {
-                    "tag": "data_type",
-                    "value": data_type
-                },
-                # The same basic data type, as a schema.org ontology term.
-                "data_type_term": {
-                    "tag": "data_type_term",
-                    "value": dt_uri
-                }
-            }
+            "annotations": annotations,
         }
-        
-        # Add exact_mappings (list of ontology URIs)
         if exact_mapping_uris:
             attribute_def["exact_mappings"] = exact_mapping_uris
-        
-        # If there are value mappings, add them to comments (standard LinkML field)
-        if column_name in st.session_state.value_ontology_mapping:
-            value_comments = []
-            for value, val_mappings in st.session_state.value_ontology_mapping[column_name].items():
-                if isinstance(val_mappings, list):
-                    for val_mapping in val_mappings:
-                        if isinstance(val_mapping, dict) and "Preferred Label" in val_mapping:
-                            comment = f"Value '{value}' maps to: {val_mapping['Preferred Label']} ({val_mapping.get('Ontology Term URI', '')})"
-                            value_comments.append(comment)
-                elif isinstance(val_mappings, dict) and "Preferred Label" in val_mappings:
-                    comment = f"Value '{value}' maps to: {val_mappings['Preferred Label']} ({val_mappings.get('Ontology Term URI', '')})"
-                    value_comments.append(comment)
-            
-            if value_comments:
-                attribute_def["comments"] = value_comments
-        
+        if value_comments:
+            attribute_def["comments"] = value_comments
         main_class["attributes"][safe_column_name] = attribute_def
-    
-    # When only value_ontology_mapping exists (no mapped_terms)
-    if not has_column_mappings and has_value_mappings:
-        for column_name, value_dict in st.session_state.value_ontology_mapping.items():
-            safe_column_name = column_name.replace(" ", "_").replace("-", "_").lower()
-            
-            value_comments = []
-            exact_mapping_uris = []
-            
-            # Get the current data type from the DataFrame
-            data_type = get_column_data_type(column_name)
-            
-            for value, val_mappings in value_dict.items():
-                if isinstance(val_mappings, list):
-                    for val_mapping in val_mappings:
-                        if isinstance(val_mapping, dict) and "Preferred Label" in val_mapping:
-                            comment = f"Value '{value}' maps to: {val_mapping['Preferred Label']} ({val_mapping.get('Ontology Term URI', '')})"
-                            value_comments.append(comment)
-                            uri = val_mapping.get('Ontology Term URI', '')
-                            if uri and uri not in exact_mapping_uris:
-                                exact_mapping_uris.append(uri)
-                elif isinstance(val_mappings, dict) and "Preferred Label" in val_mappings:
-                    comment = f"Value '{value}' maps to: {val_mappings['Preferred Label']} ({val_mappings.get('Ontology Term URI', '')})"
-                    value_comments.append(comment)
-                    uri = val_mappings.get('Ontology Term URI', '')
-                    if uri and uri not in exact_mapping_uris:
-                        exact_mapping_uris.append(uri)
-            
-            # Convert the data type
-            range_value = dtype_to_range(data_type)
-            
-            dt_label, dt_uri = data_type_term(data_type)
-            attribute_def = {
-                "name": safe_column_name,
-                "title": column_name,
-                "description": f"Value mapping for column: {column_name}",
-                "range": range_value,
-                "annotations": {
-                    "data_type": {
-                        "tag": "data_type",
-                        "value": data_type
-                    },
-                    # The same basic data type, as a schema.org ontology term.
-                    "data_type_term": {
-                        "tag": "data_type_term",
-                        "value": dt_uri
-                    }
-                }
-            }
-            
-            if exact_mapping_uris:
-                attribute_def["exact_mappings"] = exact_mapping_uris
-            
-            if value_comments:
-                attribute_def["comments"] = value_comments
-            
-            main_class["attributes"][safe_column_name] = attribute_def
     
     # Add the class
     schema["classes"]["DataMapping"] = main_class
@@ -331,7 +305,17 @@ def _build_roundtrip_payload():
                         "data_type": get_column_data_type(column_name),
                     })
 
-    return {"column_mappings": column_mappings, "value_mappings": value_mappings}
+    # Every column, including those with no ontology term, so a re-import can
+    # restore the data type the user chose.
+    column_data_types = [
+        {"column": name, "data_type": get_column_data_type(name)}
+        for name in export_column_names()
+    ]
+    return {
+        "column_mappings": column_mappings,
+        "value_mappings": value_mappings,
+        "column_data_types": column_data_types,
+    }
 
 
 # Generate an extended schema that includes value mappings (JSON only - not for validation)
@@ -595,21 +579,12 @@ def generate_sssom_tsv():
                             "comment": f"value-level mapping (column: {column_name})",
                         })
 
-        # Basic data type of each column, recorded as a schema.org ontology term.
-        # rdfs:range states "values of this column are of this type", which is the
-        # honest relationship: the column is modelled as a slot in the LinkML
-        # export, and its range is the data type. Only standard SSSOM slots are
-        # used, so no non-standard columns are introduced.
-        seen_columns = []
-        for mapping in st.session_state.mapped_terms:
-            col_name = mapping["Original Label"]
-            if col_name not in seen_columns:
-                seen_columns.append(col_name)
-        for column_name in st.session_state.value_ontology_mapping:
-            if column_name not in seen_columns:
-                seen_columns.append(column_name)
-
-        for col_name in seen_columns:
+        # Basic data type of every column, recorded as a schema.org ontology
+        # term, including columns that have no ontology term mapped. rdfs:range
+        # states "values of this column are of this type": the column is
+        # modelled as a slot in the LinkML export, and its range is the data
+        # type. Only standard SSSOM slots are used.
+        for col_name in export_column_names():
             dt_label, dt_uri = data_type_term(get_column_data_type(col_name))
             rows.append({
                 "subject_id": f"maptology:column__{safe_text(col_name)}",

@@ -1764,10 +1764,29 @@ def detect_column_type(df, column_name):
     else:
         return "Date"
 
+# The data-type dropdown. Its session-state value is the type the user chose.
+# Exports read this before the type inferred from the column's values.
+DATA_TYPE_OPTIONS = ("String", "Float", "Integer", "Boolean", "Date", "Datetime", "Time")
+
+
+def column_dtype_widget_key(column_name):
+    return "col_info_dtype_" + str(column_name)
+
+
 # 사용자가 선택한 데이터 타입을 가져오는 함수 / Get user-selected data type
 def get_column_data_type(column_name):
-    if column_name in st.session_state.get('column_data_types', {}):
-        return st.session_state.column_data_types[column_name]
+    """The type to record for a column.
+
+    A choice in the data-type dropdown wins. The saved choice is next, for a
+    column whose dropdown is not on screen. Otherwise the type is inferred
+    from the values in the uploaded table.
+    """
+    chosen = st.session_state.get(column_dtype_widget_key(column_name))
+    if chosen in DATA_TYPE_OPTIONS:
+        return chosen
+    saved = (st.session_state.get("column_data_types") or {}).get(column_name)
+    if saved in DATA_TYPE_OPTIONS:
+        return saved
     if st.session_state.uploaded_df is not None and column_name in st.session_state.uploaded_df.columns:
         return detect_column_type(st.session_state.uploaded_df, column_name)
     return "String"

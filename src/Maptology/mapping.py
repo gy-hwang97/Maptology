@@ -1,6 +1,6 @@
 import streamlit as st
 from ontology import get_ontology_details
-from utils import get_column_data_type
+from utils import DATA_TYPE_OPTIONS, column_dtype_widget_key, get_column_data_type
 
 # =============================================================================
 # Single source of truth
@@ -269,11 +269,12 @@ def on_column_select():
 
 
 def on_column_dtype_change():
-    """Keep Step 6 in step with the data type chosen above it."""
+    """Keep Step 6 and the exports in step with the data type chosen above."""
     column = st.session_state.get("selected_column")
     if column:
-        st.session_state.column_data_types[column] = st.session_state.get(
-            "col_info_dtype_" + str(column))
+        chosen = st.session_state.get(column_dtype_widget_key(column))
+        if chosen in DATA_TYPE_OPTIONS:
+            st.session_state.column_data_types[column] = chosen
     st.rerun(scope=["column_mapping", "value_mapping", "value_mappings_table"])
 
 

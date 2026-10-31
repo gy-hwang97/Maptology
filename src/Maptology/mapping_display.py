@@ -6,7 +6,7 @@ import yaml
 import json
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 from mapping import remove_individual_value_mapping, remove_term_mapping
-from schema import generate_linkml_schema, generate_sssom_tsv, data_type_term
+from schema import export_column_names, generate_linkml_schema, generate_sssom_tsv, data_type_term
 from utils import get_column_data_type, column_supports_value_mapping, mapping_row_id
 
 
@@ -347,9 +347,9 @@ def _render_value_mappings_table():
     with header_col1:
         st.markdown("<strong>Column</strong>", unsafe_allow_html=True)
     with header_col2:
-        st.markdown("<strong>Original Value</strong>", unsafe_allow_html=True)
+        st.markdown("<strong>Data Value</strong>", unsafe_allow_html=True)
     with header_col3:
-        st.markdown("<strong>Mapped Term(s)</strong>", unsafe_allow_html=True)
+        st.markdown("<strong>Ontology Term Name</strong>", unsafe_allow_html=True)
     with header_col4:
         st.markdown("<strong>Ontology</strong>", unsafe_allow_html=True)
     with header_col5:
@@ -427,24 +427,33 @@ def _render_value_mappings_table():
                 mapping_idx += 1
 
 def _column_mappings_csv():
-    """Build the column-mapping file when the user clicks Download."""
-    rows = []
+    """Build the column-mapping file when the user clicks Download.
+
+    Every column is included. A column with no ontology term gets one row
+    that still carries its schema.org data type.
+    """
+    by_column = {}
     for mapping in st.session_state.mapped_terms:
-        column_name = mapping['Original Label']
+        by_column.setdefault(mapping["Original Label"], []).append(mapping)
+    rows = []
+    for column_name in export_column_names():
         column_dtype = get_column_data_type(column_name)
-        rows.append({
-            "Column Name": column_name,
-            "Preferred Label": mapping['Preferred Label'],
-            "Ontology Name": mapping['Ontology Name'],
-            "Ontology URI": mapping['Ontology URI'],
-            "Ontology Term URI": mapping['Ontology Term URI'],
-            "Data Type": column_dtype,
-            "Data Type Term URI": data_type_term(column_dtype)[1],
-            "Definition": mapping.get('Definition', '')
-        })
+        dtype_uri = data_type_term(column_dtype)[1]
+        mappings = by_column.get(column_name) or [None]
+        for mapping in mappings:
+            rows.append({
+                "Column_Name": column_name,
+                "Ontology_Term_Name": mapping["Preferred Label"] if mapping else "",
+                "Ontology_Name": mapping["Ontology Name"] if mapping else "",
+                "Ontology_URI": mapping["Ontology URI"] if mapping else "",
+                "Ontology_Term_URI": mapping["Ontology Term URI"] if mapping else "",
+                "Data_Type": column_dtype,
+                "Data_Type_Term_URI": dtype_uri,
+                "Definition": mapping.get("Definition", "") if mapping else "",
+            })
     if not rows:
         return b""
-    return pd.DataFrame(rows).to_csv(index=False).encode('utf-8')
+    return pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
 
 
 def _value_mappings_csv():
@@ -460,15 +469,12 @@ def _value_mappings_csv():
                 entries = [val_mappings]
             for val_mapping in entries:
                 rows.append({
-                    "Column": column,
-                    "Value": value,
-                    "Preferred Label": val_mapping["Preferred Label"],
-                    "Ontology Name": val_mapping["Ontology Name"],
-                    "Ontology URI": val_mapping["Ontology URI"],
-                    "Ontology Term URI": val_mapping["Ontology Term URI"],
-                    "Data Type": current_dtype,
-                    "Data Type Term URI": current_dtype_uri,
-                    "Definition": val_mapping.get("Definition", "")
+                    "Column_Name": column,
+                    "Data_Value": value,
+                    "Ontology_Term_Name": val_mapping["Preferred Label"],
+                    "Ontology_Name": val_mapping["Ontology Name"],
+                    "Ontology_URI": val_mapping["Ontology URI"],
+                    "Ontology_Term_URI": val_mapping["Ontology Term URI"]
                 })
     if not rows:
         return b""
@@ -523,7 +529,7 @@ def render_download_buttons():
             file_name="column_mappings.csv",
             mime="text/csv",
             key="download_column_mappings",
-            disabled=not has_columns,
+            disabled=not export_column_names(),
         )
 
     with col2:

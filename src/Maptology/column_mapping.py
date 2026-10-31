@@ -16,6 +16,8 @@ from mapping import (
 )
 from components import render_term_info_popover
 from utils import (
+    DATA_TYPE_OPTIONS,
+    column_dtype_widget_key,
     get_friendly_dtype,
     display_column_info,
     get_column_data_type,
@@ -146,10 +148,9 @@ def _render_step5():
 
             df = st.session_state.uploaded_df
 
-            # Data Type dropdown (LinkML-based)
-            dtype_options = ["String", "Float", "Integer", "Boolean", "Date", "Datetime", "Time"]
-
-            # Get user-selected type from column_data_types
+            # Data Type dropdown. The choice is kept for the session, including
+            # after the user moves to another column, and exports read it.
+            dtype_options = list(DATA_TYPE_OPTIONS)
             current_display_type = get_column_data_type(selected_column)
             default_index = dtype_options.index(current_display_type) if current_display_type in dtype_options else 0
 
@@ -157,8 +158,9 @@ def _render_step5():
                 "Data type",
                 dtype_options,
                 index=default_index,
-                key="col_info_dtype_" + selected_column,
+                key=column_dtype_widget_key(selected_column),
                 on_change=on_column_dtype_change,
+                persist_state="session",
                 label_visibility="collapsed"
             )
 

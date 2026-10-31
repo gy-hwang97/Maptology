@@ -136,6 +136,7 @@ def parse_linkml(text):
                     "definition": r.get("definition", ""),
                     "data_type": r.get("data_type", ""),
                 })
+            _append_type_only_columns(col_recs, val_recs, payload.get("column_data_types") or [])
             return col_recs, val_recs
         except (ValueError, TypeError):
             pass  # fall through to best-effort
@@ -152,7 +153,11 @@ def parse_linkml(text):
             dt = ann.get("data_type")
             if isinstance(dt, dict):
                 data_type = dt.get("value", "")
-            for uri in attr.get("exact_mappings", []) or []:
+            uris = attr.get("exact_mappings", []) or []
+            if not uris and data_type:
+                col_recs.append(_type_only_record(column, data_type))
+                continue
+            for uri in uris:
                 col_recs.append({
                     "column": column,
                     "value": None,
@@ -163,6 +168,40 @@ def parse_linkml(text):
                     "data_type": data_type,
                 })
     return col_recs, val_recs
+
+
+def _type_only_record(column, data_type):
+    """A column whose file records a data type and no ontology term."""
+    return {
+        "column": column,
+        "value": None,
+        "term_uri": "",
+        "label": "",
+        "ontology_abbr": "",
+        "definition": "",
+        "data_type": data_type,
+    }
+
+
+def _append_type_only_columns(col_recs, val_recs, typed_columns):
+    """Add columns that have a saved data type but no ontology term."""
+    known = set()
+    for record in col_recs:
+        if record.get("term_uri"):
+            known.add(record.get("column"))
+    for record in val_recs:
+        if record.get("term_uri"):
+            known.add(record.get("column"))
+    for item in typed_columns:
+        if isinstance(item, dict):
+            column = item.get("column", "")
+            data_type = item.get("data_type", "")
+        else:
+            column, data_type = item, ""
+        if not column or column in known:
+            continue
+        col_recs.append(_type_only_record(column, data_type))
+        known.add(column)
 
 
 # ============================================================
@@ -255,11 +294,17 @@ def parse_sssom(text):
             })
 
     # Attach the data type recovered from the rdfs:range rows to that column's
-    # records, so re-import can restore the type the user had chosen.
+    # records, so re-import can restore the type the user had chosen. A column
+    # that only has a data type, and no ontology term, is kept too.
     for r in col_recs:
         r["data_type"] = data_types.get(r["column"], "")
     for r in val_recs:
         r["data_type"] = data_types.get(r["column"], "")
+    _append_type_only_columns(
+        col_recs,
+        val_recs,
+        [{"column": column, "data_type": data_type} for column, data_type in data_types.items()],
+    )
     return col_recs, val_recs
 
 
@@ -287,9 +332,16 @@ def filter_to_data(col_recs, val_recs, df):
 
     kept_cols = []
     dropped_cols = []
+    type_recs = []
     for r in col_recs:
         actual = _match_column(r["column"], actual_cols, norm_map)
-        if actual is not None and r.get("term_uri"):
+        if not str(r.get("term_uri") or "").strip():
+            if actual is not None and r.get("data_type"):
+                r2 = dict(r)
+                r2["column"] = actual
+                type_recs.append(r2)
+            continue
+        if actual is not None:
             r2 = dict(r)
             r2["column"] = actual
             kept_cols.append(r2)
@@ -315,7 +367,7 @@ def filter_to_data(col_recs, val_recs, df):
         else:
             dropped_vals.append(r)
 
-    return kept_cols, kept_vals, dropped_cols, dropped_vals
+    return kept_cols, kept_vals, dropped_cols, dropped_vals, type_recs
 
 
 # ============================================================
@@ -510,7 +562,8 @@ def _restore_data_types(records):
             continue
         st.session_state.column_data_types[column] = data_type
         # Sync the Data Type selectbox before Step 5 creates it.
-        st.session_state["col_info_dtype_" + str(column)] = data_type
+        from utils import column_dtype_widget_key
+        st.session_state[column_dtype_widget_key(column)] = data_type
         applied.append(str(column))
     return applied, rejected
 
@@ -557,12 +610,14 @@ def render_import_section():
                 return
 
             df = st.session_state.uploaded_df
-            kept_cols, kept_vals, dropped_cols, dropped_vals = filter_to_data(
+            kept_cols, kept_vals, dropped_cols, dropped_vals, type_recs = filter_to_data(
                 col_recs, val_recs, df
             )
             new_cols, new_vals = apply_mappings(kept_cols, kept_vals)
             unknown_onts, overflow_onts = _auto_select_ontologies(kept_cols, kept_vals)
-            applied_types, rejected_types = _restore_data_types(kept_cols + kept_vals)
+            applied_types, rejected_types = _restore_data_types(
+                kept_cols + kept_vals + type_recs
+            )
 
             st.session_state.imported_mapping_hash = file_hash
             st.session_state.imported_mapping_name = uploaded.name
