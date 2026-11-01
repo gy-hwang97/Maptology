@@ -16,7 +16,7 @@ Although other tools exist for mapping text to ontology terms (e.g., [text2term]
 
 #### Step 1: Upload Data File
 
-Upload a tabular data file in CSV, TSV, or Excel format. Column names in the file should be unique.
+Upload a tabular data file in CSV, TSV, or Excel format. Column names in the file should be unique. Maptology holds your file and mappings in session memory while you work; it does not write them into a permanent data store.
 
 #### Step 2: Preview Data
 
@@ -48,6 +48,11 @@ Export your mappings as LinkML and/or SSSOM files, along with CSV summaries of t
 
 You can try Maptology at
 [https://bioapps.byu.edu/maptology](https://bioapps.byu.edu/maptology).
+
+Uploaded files and the mappings you create are held in the server's session
+memory while you use the app. Maptology does not save them to a permanent
+database or file archive on our side. When your session ends, that working
+copy is gone.
 
 ### Run it on your own computer with Docker
 
