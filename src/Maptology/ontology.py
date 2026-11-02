@@ -118,8 +118,6 @@ def search_ontology(selected_column):
     df_results = search_local(search_term, st.session_state.selected_ontologies)
 
     if df_results is not None and len(df_results) > 0:
-        # Sort by relevance (TF-IDF cosine similarity), highest first
-        df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
         st.session_state.ontology_results = df_results
         # The auto-suggestion list shows the TOP 10 overall. search_local returns
         # up to 10 PER ontology, so with several ontologies selected the combined
@@ -159,8 +157,6 @@ def search_ontology_for_value(selected_value):
     df_results = search_local(search_term, st.session_state.selected_ontologies)
 
     if df_results is not None and len(df_results) > 0:
-        # Sort by relevance (TF-IDF cosine similarity), highest first
-        df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
         # Auto-suggestion list: keep only the top 10 overall (see search_ontology).
         st.session_state.value_ontology_results = (
             df_results.drop_duplicates(subset=["Ontology Term URI"], keep="first").head(10)
@@ -188,8 +184,6 @@ def search_bioportal_all_columns(search_term):
     df_results = search_local(search_term, st.session_state.selected_ontologies)
 
     if df_results is not None and len(df_results) > 0:
-        # Sort by relevance (TF-IDF cosine similarity), highest first
-        df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
         st.session_state.ontology_results = df_results
         st.session_state.filtered_ontology_results = df_results
 
@@ -219,8 +213,6 @@ def search_bioportal_all(search_term):
     df_results = search_local(search_term, st.session_state.selected_ontologies)
 
     if df_results is not None and len(df_results) > 0:
-        # Sort by relevance (TF-IDF cosine similarity), highest first
-        df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
         st.session_state.value_ontology_results = df_results
 
         # Reset selection
@@ -250,8 +242,6 @@ def search_bioportal_manual_value(search_term):
     df_results = search_local(search_term, st.session_state.selected_ontologies, top_n=20)
 
     if df_results is not None and len(df_results) > 0:
-        # Sort by relevance (TF-IDF cosine similarity), highest first
-        df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
         st.session_state.manual_value_search_results = df_results
         st.session_state.manual_value_selected_indices = []
         return True
@@ -279,8 +269,6 @@ def search_bioportal_manual_column(search_term):
     df_results = search_local(search_term, st.session_state.selected_ontologies, top_n=20)
 
     if df_results is not None and len(df_results) > 0:
-        # Sort by relevance (TF-IDF cosine similarity), highest first
-        df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
         st.session_state.manual_column_search_results = df_results
         st.session_state.manual_column_selected_terms = []
         return True
@@ -868,6 +856,15 @@ def _accept_ontology_selection(acronym, available_ontologies):
         st.session_state.available_ontologies = []
         # The row still says an update is available until the list is rebuilt.
         st.session_state.ontology_list_needs_redraw = True
+    try:
+        import e12_search
+        with st.spinner("Preparing the search index for " + acronym + "..."):
+            if e12_search.load_index(acronym) is None:
+                raise FileNotFoundError("No installed ontology terms for " + acronym)
+    except Exception as exc:
+        st.session_state.ontology_install_error = (
+            "Could not prepare " + acronym + " for search: " + str(exc))
+        st.rerun()
     selected.append(acronym)
     st.session_state.ontologies_changed = True
     seq = st.session_state.get("ontology_filter_focus_seq", 0) + 1
@@ -919,6 +916,19 @@ def _on_ontology_select_request():
     selected = st.session_state.selected_ontologies
     if valid == list(selected):
         return
+    import e12_search
+    try:
+        for acronym in valid:
+            if acronym not in selected:
+                with st.spinner("Preparing the search index for " + acronym + "..."):
+                    if e12_search.load_index(acronym) is None:
+                        raise FileNotFoundError("No installed ontology terms for " + acronym)
+    except Exception as exc:
+        st.session_state.ontology_install_error = (
+            "Could not prepare " + acronym + " for search: " + str(exc))
+        st.rerun()
+    for acronym in set(selected) - set(valid):
+        e12_search.unload(acronym)
     selected[:] = valid
     st.session_state.ontology_filter = ""
     st.session_state.ontologies_changed = True
@@ -937,6 +947,8 @@ def _on_ontology_remove_request():
     for acronym in _request_acronyms(raw):
         if acronym in selected:
             selected.remove(acronym)
+            import e12_search
+            e12_search.unload(acronym)
             changed = True
     if not changed:
         return

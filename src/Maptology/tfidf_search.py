@@ -197,34 +197,12 @@ def _preload_worker():
 
 
 def preload_downloaded_ontologies():
-    """Read downloaded indexes into memory on a background thread.
+    """E12 loads the selected ontology on demand.
 
-    Not started when the page opens. Loading every index at once uses enough
-    memory to slow the keyword search, and a large index still has to be read
-    when that ontology is actually selected.
+    Loading the former word indexes here would retain a second copy of every
+    downloaded ontology, even though search no longer uses those matrices.
     """
-    global _preload_started
-    if _preload_started:
-        return
-    acronyms = _downloaded_acronyms()
-    if not acronyms:
-        return
-    with _preload_guard:
-        if not _preload_started:
-            _preload_started = True
-            threading.Thread(target=_preload_worker, daemon=True,
-                             name="maptology-index-preload").start()
-        fresh = []
-        for acronym in acronyms:
-            if acronym in _preload_queued or acronym in _loaded_ontologies:
-                continue
-            _preload_queued.add(acronym)
-            fresh.append(acronym)
-    for acronym in sorted(fresh, key=_matrix_bytes):
-        _preload_queue.put((_matrix_bytes(acronym), acronym))
-    if fresh:
-        print("Loading %d ontology indexes in the background so Step 5 can "
-              "open without waiting on disk." % len(fresh), flush=True)
+    return
 
 
 # ============================================================
@@ -241,7 +219,8 @@ def get_term_by_iri(acronym, iri):
     """
     if not acronym or not iri:
         return None
-    data = _load_ontology_data(acronym)
+    import e12_search
+    data = e12_search.load_index(acronym)
     if data is None:
         return None
     index = data.get("iri_index")
@@ -274,85 +253,45 @@ def search_local(search_term, selected_ontologies, top_n=10):
             Ontology URI, Ontology Term URI
         Returns None if no results found.
     """
-    _sparse, linear_kernel = _search_libs()
-    if not search_term:
-        return None
+    return search_many([search_term], selected_ontologies, top_n=top_n)[0]
 
+
+def search_many(search_terms, selected_ontologies, top_n=10, batch_size=32):
+    """Return one E12 result frame per input in the original input order."""
+    import e12_search
+
+    inputs = list(search_terms)
+    if not inputs:
+        return []
     if not selected_ontologies:
-        return None
+        empty = []
+        for _ in inputs:
+            empty.append(None)
+        return empty
 
-    search_term = str(search_term).strip()
-    if len(search_term) == 0:
-        return None
-
-    all_results = []
-
-    # Search each selected ontology
+    combined = []
+    for _ in inputs:
+        combined.append([])
     for acronym in selected_ontologies:
-        # Load precomputed data
-        data = _load_ontology_data(acronym)
+        per_input = e12_search.search_many(acronym, inputs, top_n, batch_size)
+        for rows, more in zip(combined, per_input):
+            rows.extend(more)
 
-        if data is None:
+    def result_sort_key(row):
+        return (
+            not row["_exact_match"],
+            -row["Mapping Score"],
+            str(row["Preferred Label"]),
+            str(row["Ontology Term URI"]),
+        )
+
+    frames = []
+    for rows in combined:
+        if not rows:
+            frames.append(None)
             continue
-
-        tfidf_matrix = data["tfidf_matrix"]
-        vectorizer = data["vectorizer"]
-        terms = data["terms"]
-
-        # Convert search term to vector
-        query_vector = vectorizer.transform([search_term])
-
-        # Compute cosine similarity
-        scores = linear_kernel(query_vector, tfidf_matrix)
-        score_array = scores[0]
-
-        # Get top N indices
-        sorted_indices = score_array.argsort()[::-1]
-        top_indices = sorted_indices[:top_n]
-
-        # Build results
-        for idx in top_indices:
-            score = score_array[idx]
-
-            if score <= 0:
-                continue
-
-            term = terms[idx]
-
-            label = term.get("label", "")
-            if not label:
-                continue
-
-            definition = term.get("definition", "No definition available")
-            iri = term.get("iri", "N/A")
-            synonyms = term.get("synonyms", []) or []
-
-            result = {}
-            result["Ontology Name"] = acronym
-            result["Preferred Label"] = label
-            result["Definition"] = definition
-            result["Synonyms"] = synonyms
-            result["Ontology URI"] = "https://bioportal.bioontology.org/ontologies/" + acronym
-            result["Ontology Term URI"] = iri
-            # Keep the RAW similarity as the sort key. Rounding here (e.g. to 3
-            # decimals) would create artificial ties that then get ordered by
-            # Preferred Label, which can change the Top-10 boundary. The score is
-            # never displayed, so there is no reason to round it.
-            result["Mapping Score"] = float(score)
-
-            all_results.append(result)
-
-    if len(all_results) == 0:
-        return None
-
-    # Create DataFrame
-    df_results = pd.DataFrame(all_results)
-
-    # Sort by score (descending), then by Preferred Label
-    df_results = df_results.sort_values(by=["Mapping Score", "Preferred Label"], ascending=[False, True])
-
-    # Remove the score column (not needed for display, matches BioPortal format)
-    # Actually keep it - it can be useful
-    # df_results = df_results.drop(columns=["Mapping Score"])
-
-    return df_results
+        rows.sort(key=result_sort_key)
+        for row in rows:
+            row.pop("_exact_match")
+        frames.append(pd.DataFrame(rows))
+    return frames

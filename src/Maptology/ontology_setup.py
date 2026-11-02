@@ -137,6 +137,11 @@ def _drop_stale_indexes():
     except Exception:
         pass
     try:
+        import e12_search
+        e12_search.clear_loaded()
+    except Exception:
+        pass
+    try:
         import ontology
         ontology._load_ontology_catalog.clear()
     except Exception:
