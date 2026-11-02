@@ -51,7 +51,10 @@ def _render_value_checklist(df, key_prefix, column, value):
         # The id is on every row, mapped or not, so a later trash click can
         # show this row again without redrawing the search.
         row_id = mapping_row_id(column, value, term_uri)
-        row_key = ("term_row_mapped_v_" if mapped else "term_row_v_") + row_id
+        if mapped:
+            row_key = "term_row_mapped_v_" + row_id
+        else:
+            row_key = "term_row_v_" + row_id
         # Add button and the term on the left. The info icon is pinned to the
         # right edge of the row, same as Select ontologies.
         with st.container(horizontal=True, vertical_alignment="center",
@@ -71,9 +74,12 @@ def _render_value_checklist(df, key_prefix, column, value):
                 "term_uri": row["Ontology Term URI"],
                 "synonyms": row.get("Synonyms", []),
             }, "info_" + base)
+    hidden = ""
+    if shown > 0:
+        hidden = " hidden"
     st.markdown(
         '<p class="maptology-all-mapped"'
-        + ("" if shown == 0 else " hidden")
+        + hidden
         + ">Every matching term has been added. "
         "Remove one from the table below to add it again.</p>",
         unsafe_allow_html=True)
@@ -129,7 +135,9 @@ def _render_step6():
         # documents each one, so a value the dropdown never offers can never
         # be mapped. (This list used to be truncated to the first 5, which
         # silently made values 6+ impossible to map at all.)
-        all_values = [str(v) for v in unique_values]
+        all_values = []
+        for value in unique_values:
+            all_values.append(str(value))
 
         # A long dropdown is hard to work through, so offer a filter once the
         # list is big enough to need one. Short columns render exactly as before.
@@ -141,7 +149,11 @@ def _render_step6():
                 placeholder="Type to filter values...",
             ))
             if needle:
-                matches = [v for v in all_values if needle.lower() in v.lower()]
+                matches = []
+                search_text = needle.lower()
+                for value in all_values:
+                    if search_text in value.lower():
+                        matches.append(value)
                 if matches:
                     value_options = matches
                 else:
@@ -150,18 +162,20 @@ def _render_step6():
                        + str(len(all_values)) + " unique values")
 
         if st.session_state.selected_unique_value is None or st.session_state.selected_unique_value not in value_options:
-            default_value = value_options[0] if value_options else None
+            default_value = None
+            if value_options:
+                default_value = value_options[0]
             st.session_state.selected_unique_value = default_value
             if default_value and st.session_state.selected_ontologies:
                 search_ontology_for_value(default_value)
                 st.session_state.auto_searched = True
 
-        default_index = value_options.index(st.session_state.selected_unique_value) if st.session_state.selected_unique_value in value_options else 0
+        # Keep the keyed widget in sync when a new column shares value labels.
+        st.session_state.value_select = st.session_state.selected_unique_value
 
         selected_value = st.selectbox(
             "Select value to map",
             value_options,
-            index=default_index,
             key="value_select",
             on_change=on_value_select,
             label_visibility="collapsed"
