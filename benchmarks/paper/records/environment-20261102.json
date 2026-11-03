@@ -1,0 +1,56 @@
+{
+  "accuracy_run": "accuracy-20261102T172014490185Z",
+  "speed_run": "speed-20261102T172440749389Z",
+  "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+  "logical_cpus": 22,
+  "physical_cpus": 16,
+  "packages": {
+    "numpy": "2.3.5",
+    "scipy": "1.18.0",
+    "scikit-learn": "1.8.0",
+    "pandas": "2.3.3",
+    "text2term": "4.5.0",
+    "sparse-dot-topn": "1.2.0",
+    "psutil": "7.2.2"
+  },
+  "pythonhashseed": "0",
+  "power": "mains before and after each speed call",
+  "ontology": "EFO 3.62.0",
+  "ontology_owl_sha256": "f87fc3cdbae7fac68c5b2a470ae81da59bec3fa98ada908c5262dc89edcdb0bc",
+  "target_terms": 29374,
+  "max_mappings": 5,
+  "speed_repeats": 5,
+  "speed_warmups": 1,
+  "speed_timer_excludes": "Imports, input loading, index loading, gc.collect and output checks",
+  "operating_system_file_cache_cleared": false,
+  "input_hashes": {
+    "eval-Biomappings.tsv": "ea73015a9da60239cc325fa1468d1389ffa6196c069a55f38ae29b1044ed1e4a",
+    "eval-OLS-EFO.tsv": "f4e4c79b8606fc9f18cb75c96a179a246248b0f6e15608c69ab8d5a038529b1b",
+    "eval-UKBB-EFO.tsv": "b5aa35bb07275d5e52857efd886b7bff76b56b5dd96e5579ad175ccecec978ca",
+    "speed-sample-Biomappings.tsv": "86456071f59430e6319d0247eca9588d4e9e8e92e7ff72d91d1a72ffd8205d39",
+    "speed-sample-OLS-EFO.tsv": "3cecdbbe59f95dcf8b9cfbd7516d35fe60e8b684c3d7822e0a52868f1c81ce11",
+    "speed-sample-UKBB-EFO.tsv": "e20e2254522812a3575d142377024a23238e92fc42c1480901a9afe0fe4a5c30"
+  },
+  "accuracy_code_hashes_at_run": {
+    "benchmark_common.py": "1e5e8c9c6c62f9bfb6751dda8ee112a209646d834c0c25fa6b0b8774883e36c7",
+    "prepare_upload.py": "7f3811d695c42fb81a0295beed1b4faa2f6ad5f21e899c95632b5193a9b8e00e",
+    "run_accuracy.py": "a9af24c13244f3e5d01298c7906ebf0039c045df22505c9bd5ca2c8050d22931",
+    "run_speed.py": "35ff235e854dd3fb4659d4a387a17f0d670e08761d749f3fa11cd95f9919e880",
+    "method/common.py": "f89c1ff6c40b45c261552b9bb375696d9f1194255ee04ffeceb39b6ff5dbbe3c",
+    "method/engines.py": "662606d38bfa8926018963f87f27f98def444aaeee8cc60d8509eabcffae82c1",
+    "method/optimized.py": "55eee307cce0368ff799631db74e4c8fbf99ded0da74205734faf6f0de0b0102",
+    "method/paths.py": "d58f47763a5efc1cb700810f309a9c729c558a3fdd1ade48fd048df77e7ae751"
+  },
+  "speed_code_hashes_at_run": {
+    "benchmark_common.py": "1e5e8c9c6c62f9bfb6751dda8ee112a209646d834c0c25fa6b0b8774883e36c7",
+    "prepare_upload.py": "7f3811d695c42fb81a0295beed1b4faa2f6ad5f21e899c95632b5193a9b8e00e",
+    "run_accuracy.py": "a9af24c13244f3e5d01298c7906ebf0039c045df22505c9bd5ca2c8050d22931",
+    "run_speed.py": "35ff235e854dd3fb4659d4a387a17f0d670e08761d749f3fa11cd95f9919e880",
+    "method/common.py": "f89c1ff6c40b45c261552b9bb375696d9f1194255ee04ffeceb39b6ff5dbbe3c",
+    "method/engines.py": "662606d38bfa8926018963f87f27f98def444aaeee8cc60d8509eabcffae82c1",
+    "method/optimized.py": "55eee307cce0368ff799631db74e4c8fbf99ded0da74205734faf6f0de0b0102",
+    "method/paths.py": "d58f47763a5efc1cb700810f309a9c729c558a3fdd1ade48fd048df77e7ae751"
+  }
+}

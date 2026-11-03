@@ -1,0 +1,112 @@
+dataset	workload	method_id	repeat	warmup	input_rows	power_before	power_after	eligible	status	seconds	rank_mismatches	score_mismatches	error
+OLS-EFO	Pilot	batch32_dedup	0	True	100	mains	mains	True	ok	0.09297639999931562	0	0	
+OLS-EFO	Pilot	batch32	0	True	100	mains	mains	True	ok	0.0796226000002207	0	0	
+OLS-EFO	Pilot	T	0	True	100	mains	mains	True	ok	3.150057499999093	0	0	
+UKBB-EFO	N=100 sample	batch32_dedup	0	True	100	mains	mains	True	ok	0.09265690000029281	0	0	
+UKBB-EFO	N=100 sample	batch32	0	True	100	mains	mains	True	ok	0.09469119999994291	0	0	
+UKBB-EFO	N=100 sample	T	0	True	100	mains	mains	True	ok	2.2391678000003594	0	0	
+UKBB-EFO	N=100 sample	batch32	1	False	100	mains	mains	True	ok	0.09628039999915927	0	0	
+UKBB-EFO	N=100 sample	T	1	False	100	mains	mains	True	ok	2.235855299999457	0	0	
+UKBB-EFO	N=100 sample	batch32_dedup	1	False	100	mains	mains	True	ok	0.09589269999924	0	0	
+UKBB-EFO	N=100 sample	T	2	False	100	mains	mains	True	ok	2.254521900000327	0	0	
+UKBB-EFO	N=100 sample	batch32_dedup	2	False	100	mains	mains	True	ok	0.09511600000041653	0	0	
+UKBB-EFO	N=100 sample	batch32	2	False	100	mains	mains	True	ok	0.0965487999983452	0	0	
+UKBB-EFO	N=100 sample	batch32_dedup	3	False	100	mains	mains	True	ok	0.09801420000076178	0	0	
+UKBB-EFO	N=100 sample	batch32	3	False	100	mains	mains	True	ok	0.097068400000353	0	0	
+UKBB-EFO	N=100 sample	T	3	False	100	mains	mains	True	ok	2.2591126000006625	0	0	
+UKBB-EFO	N=100 sample	batch32	4	False	100	mains	mains	True	ok	0.09536360000129207	0	0	
+UKBB-EFO	N=100 sample	T	4	False	100	mains	mains	True	ok	2.2581938000002992	0	0	
+UKBB-EFO	N=100 sample	batch32_dedup	4	False	100	mains	mains	True	ok	0.09511709999969753	0	0	
+UKBB-EFO	N=100 sample	T	5	False	100	mains	mains	True	ok	2.2503519999991113	0	0	
+UKBB-EFO	N=100 sample	batch32_dedup	5	False	100	mains	mains	True	ok	0.09409279999999853	0	0	
+UKBB-EFO	N=100 sample	batch32	5	False	100	mains	mains	True	ok	0.09695609999835142	0	0	
+UKBB-EFO	All evaluation rows	batch32_dedup	0	True	899	mains	mains	True	ok	0.8380278000004182	0	0	
+UKBB-EFO	All evaluation rows	batch32	0	True	899	mains	mains	True	ok	0.8411649000008765	0	0	
+UKBB-EFO	All evaluation rows	T	0	True	899	mains	mains	True	ok	2.49694449999879	0	0	
+UKBB-EFO	All evaluation rows	batch32	1	False	899	mains	mains	True	ok	0.8167792999993253	0	0	
+UKBB-EFO	All evaluation rows	T	1	False	899	mains	mains	True	ok	2.345689499999935	0	0	
+UKBB-EFO	All evaluation rows	batch32_dedup	1	False	899	mains	mains	True	ok	0.7629724000016722	0	0	
+UKBB-EFO	All evaluation rows	T	2	False	899	mains	mains	True	ok	2.357274600000892	0	0	
+UKBB-EFO	All evaluation rows	batch32_dedup	2	False	899	mains	mains	True	ok	0.7430139999996754	0	0	
+UKBB-EFO	All evaluation rows	batch32	2	False	899	mains	mains	True	ok	0.7573557000014262	0	0	
+UKBB-EFO	All evaluation rows	batch32_dedup	3	False	899	mains	mains	True	ok	0.7445208999997703	0	0	
+UKBB-EFO	All evaluation rows	batch32	3	False	899	mains	mains	True	ok	0.7475383000000875	0	0	
+UKBB-EFO	All evaluation rows	T	3	False	899	mains	mains	True	ok	2.3533315999993647	0	0	
+UKBB-EFO	All evaluation rows	batch32	4	False	899	mains	mains	True	ok	0.7456782999997813	0	0	
+UKBB-EFO	All evaluation rows	T	4	False	899	mains	mains	True	ok	2.354727300000377	0	0	
+UKBB-EFO	All evaluation rows	batch32_dedup	4	False	899	mains	mains	True	ok	0.7692091999997501	0	0	
+UKBB-EFO	All evaluation rows	T	5	False	899	mains	mains	True	ok	2.4132042000001093	0	0	
+UKBB-EFO	All evaluation rows	batch32_dedup	5	False	899	mains	mains	True	ok	0.7687939999996161	0	0	
+UKBB-EFO	All evaluation rows	batch32	5	False	899	mains	mains	True	ok	0.7578930999989097	0	0	
+Biomappings	N=100 sample	batch32_dedup	0	True	100	mains	mains	True	ok	0.07989989999987301	0	0	
+Biomappings	N=100 sample	batch32	0	True	100	mains	mains	True	ok	0.07602810000025784	0	0	
+Biomappings	N=100 sample	T	0	True	100	mains	mains	True	ok	2.159875600000305	0	0	
+Biomappings	N=100 sample	batch32	1	False	100	mains	mains	True	ok	0.07861330000014277	0	0	
+Biomappings	N=100 sample	T	1	False	100	mains	mains	True	ok	2.24352159999944	0	0	
+Biomappings	N=100 sample	batch32_dedup	1	False	100	mains	mains	True	ok	0.07786420000047656	0	0	
+Biomappings	N=100 sample	T	2	False	100	mains	mains	True	ok	2.2010725999989518	0	0	
+Biomappings	N=100 sample	batch32_dedup	2	False	100	mains	mains	True	ok	0.07664699999986624	0	0	
+Biomappings	N=100 sample	batch32	2	False	100	mains	mains	True	ok	0.07578789999934088	0	0	
+Biomappings	N=100 sample	batch32_dedup	3	False	100	mains	mains	True	ok	0.0754239999987476	0	0	
+Biomappings	N=100 sample	batch32	3	False	100	mains	mains	True	ok	0.0764130000006844	0	0	
+Biomappings	N=100 sample	T	3	False	100	mains	mains	True	ok	2.195961699999316	0	0	
+Biomappings	N=100 sample	batch32	4	False	100	mains	mains	True	ok	0.07950130000062927	0	0	
+Biomappings	N=100 sample	T	4	False	100	mains	mains	True	ok	2.1646342999993067	0	0	
+Biomappings	N=100 sample	batch32_dedup	4	False	100	mains	mains	True	ok	0.07615079999959562	0	0	
+Biomappings	N=100 sample	T	5	False	100	mains	mains	True	ok	2.189828700000362	0	0	
+Biomappings	N=100 sample	batch32_dedup	5	False	100	mains	mains	True	ok	0.07822089999899617	0	0	
+Biomappings	N=100 sample	batch32	5	False	100	mains	mains	True	ok	0.07762329999968642	0	0	
+Biomappings	All evaluation rows	batch32_dedup	0	True	796	mains	mains	True	ok	0.5906752000009874	0	0	
+Biomappings	All evaluation rows	batch32	0	True	796	mains	mains	True	ok	0.6036371999998664	0	0	
+Biomappings	All evaluation rows	T	0	True	796	mains	mains	True	ok	2.267223400000148	0	0	
+Biomappings	All evaluation rows	batch32	1	False	796	mains	mains	True	ok	0.5968990000001213	0	0	
+Biomappings	All evaluation rows	T	1	False	796	mains	mains	True	ok	2.286202300001605	0	0	
+Biomappings	All evaluation rows	batch32_dedup	1	False	796	mains	mains	True	ok	0.6031505999999354	0	0	
+Biomappings	All evaluation rows	T	2	False	796	mains	mains	True	ok	2.3082961999989493	0	0	
+Biomappings	All evaluation rows	batch32_dedup	2	False	796	mains	mains	True	ok	0.6014202000005753	0	0	
+Biomappings	All evaluation rows	batch32	2	False	796	mains	mains	True	ok	0.6009802000007767	0	0	
+Biomappings	All evaluation rows	batch32_dedup	3	False	796	mains	mains	True	ok	0.5429810999994515	0	0	
+Biomappings	All evaluation rows	batch32	3	False	796	mains	mains	True	ok	0.5542091000006621	0	0	
+Biomappings	All evaluation rows	T	3	False	796	mains	mains	True	ok	2.1937052000012045	0	0	
+Biomappings	All evaluation rows	batch32	4	False	796	mains	mains	True	ok	0.5512507000003097	0	0	
+Biomappings	All evaluation rows	T	4	False	796	mains	mains	True	ok	2.2382932000000437	0	0	
+Biomappings	All evaluation rows	batch32_dedup	4	False	796	mains	mains	True	ok	0.5423783000005642	0	0	
+Biomappings	All evaluation rows	T	5	False	796	mains	mains	True	ok	2.2641203999992285	0	0	
+Biomappings	All evaluation rows	batch32_dedup	5	False	796	mains	mains	True	ok	0.5475074999994831	0	0	
+Biomappings	All evaluation rows	batch32	5	False	796	mains	mains	True	ok	0.5517458999984228	0	0	
+OLS-EFO	N=100 sample	batch32_dedup	0	True	100	mains	mains	True	ok	0.08159119999982067	0	0	
+OLS-EFO	N=100 sample	batch32	0	True	100	mains	mains	True	ok	0.08106429999861575	0	0	
+OLS-EFO	N=100 sample	T	0	True	100	mains	mains	True	ok	2.1974765000013576	0	0	
+OLS-EFO	N=100 sample	batch32	1	False	100	mains	mains	True	ok	0.08387670000047365	0	0	
+OLS-EFO	N=100 sample	T	1	False	100	mains	mains	True	ok	2.1776073000000906	0	0	
+OLS-EFO	N=100 sample	batch32_dedup	1	False	100	mains	mains	True	ok	0.08725720000074944	0	0	
+OLS-EFO	N=100 sample	T	2	False	100	mains	mains	True	ok	2.2251126000010117	0	0	
+OLS-EFO	N=100 sample	batch32_dedup	2	False	100	mains	mains	True	ok	0.0829967999998189	0	0	
+OLS-EFO	N=100 sample	batch32	2	False	100	mains	mains	True	ok	0.08520779999889783	0	0	
+OLS-EFO	N=100 sample	batch32_dedup	3	False	100	mains	mains	True	ok	0.08996579999984533	0	0	
+OLS-EFO	N=100 sample	batch32	3	False	100	mains	mains	True	ok	0.09872030000042287	0	0	
+OLS-EFO	N=100 sample	T	3	False	100	mains	mains	True	ok	2.293038100000558	0	0	
+OLS-EFO	N=100 sample	batch32	4	False	100	mains	mains	True	ok	0.08416150000084599	0	0	
+OLS-EFO	N=100 sample	T	4	False	100	mains	mains	True	ok	2.204875199999151	0	0	
+OLS-EFO	N=100 sample	batch32_dedup	4	False	100	mains	mains	True	ok	0.0858038000005763	0	0	
+OLS-EFO	N=100 sample	T	5	False	100	mains	mains	True	ok	2.2069252999990567	0	0	
+OLS-EFO	N=100 sample	batch32_dedup	5	False	100	mains	mains	True	ok	0.08599090000097931	0	0	
+OLS-EFO	N=100 sample	batch32	5	False	100	mains	mains	True	ok	0.08226209999884304	0	0	
+OLS-EFO	All evaluation rows	batch32_dedup	0	True	9998	mains	mains	True	ok	6.168554400001085	0	0	
+OLS-EFO	All evaluation rows	batch32	0	True	9998	mains	mains	True	ok	8.330409999998665	0	0	
+OLS-EFO	All evaluation rows	T	0	True	9998	mains	mains	True	ok	5.061732600001051	0	0	
+OLS-EFO	All evaluation rows	batch32	1	False	9998	mains	mains	True	ok	8.681399799999781	0	0	
+OLS-EFO	All evaluation rows	T	1	False	9998	mains	mains	True	ok	5.031543799999781	0	0	
+OLS-EFO	All evaluation rows	batch32_dedup	1	False	9998	mains	mains	True	ok	6.634913400001096	0	0	
+OLS-EFO	All evaluation rows	T	2	False	9998	mains	mains	True	ok	4.992663299999549	0	0	
+OLS-EFO	All evaluation rows	batch32_dedup	2	False	9998	mains	mains	True	ok	6.674870400000145	0	0	
+OLS-EFO	All evaluation rows	batch32	2	False	9998	mains	mains	True	ok	9.094323799999984	0	0	
+OLS-EFO	All evaluation rows	batch32_dedup	3	False	9998	mains	mains	True	ok	6.642369200000758	0	0	
+OLS-EFO	All evaluation rows	batch32	3	False	9998	mains	mains	True	ok	8.788590500000282	0	0	
+OLS-EFO	All evaluation rows	T	3	False	9998	mains	mains	True	ok	5.005561800000578	0	0	
+OLS-EFO	All evaluation rows	batch32	4	False	9998	mains	mains	True	ok	8.15539329999956	0	0	
+OLS-EFO	All evaluation rows	T	4	False	9998	mains	mains	True	ok	5.016116000000693	0	0	
+OLS-EFO	All evaluation rows	batch32_dedup	4	False	9998	mains	mains	True	ok	6.133336299999428	0	0	
+OLS-EFO	All evaluation rows	T	5	False	9998	mains	mains	True	ok	5.07618039999943	0	0	
+OLS-EFO	All evaluation rows	batch32_dedup	5	False	9998	mains	mains	True	ok	6.21010380000007	0	0	
+OLS-EFO	All evaluation rows	batch32	5	False	9998	mains	mains	True	ok	8.375101199999335	0	0	

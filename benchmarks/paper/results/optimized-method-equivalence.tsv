@@ -1,0 +1,13 @@
+check	items_compared	differences	status	evidence_file	checked_by
+Largest score difference over all name and synonym rows, optimized vs original code	8890	0.0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/score-comparison.csv	verify.py, 2026-10-24
+Largest difference in input TF-IDF vectors	8890	0.0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/summary.json	verify.py, 2026-10-24
+Top-5 candidates: terms, order, labels, scores, exact-match flags	8890	0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/summary.json	verify.py, 2026-10-24
+Comparison with the frozen predictions behind the accuracy results	8890	0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/summary.json	verify.py, 2026-10-24
+Search paths that refit TF-IDF	8890	0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/summary.json	verify.py, 2026-10-24
+Edge and configuration cases	1248	0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/summary.json	verify.py, 2026-10-24
+Evaluation rows restored after batching and repeated-input reuse, both optimized variants combined	23386	0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/row-expansion.csv	verify.py, 2026-10-24
+Top-1 and Top-5 hits across original and optimized code, per dataset	12	0	pass	testing folder/e12-optimization-test-20261024/data/verify-20261024T070858252278Z/accuracy-consistency.csv	verify.py, 2026-10-24
+Timed runs whose output differed from the verified output	112	0	pass	testing folder/e12-optimization-test-20261024/data/benchmark-20261024T071517092458Z/speed-raw.csv	benchmark.py, 2026-10-24
+Warm-up output of the timed run (batches of 32, each distinct input computed once) vs frozen predictions, every evaluation row	11693	0	pass	testing folder/e12-optimization-test-20261024/data/benchmark-20261024T071517092458Z/batch32_dedup-OLS-EFO-full-r0-predictions.json	paper_benchmark.py export, 2026-10-31, from saved files
+Warm-up output of the timed run (batches of 32) vs frozen predictions, every evaluation row	11693	0	pass	testing folder/e12-optimization-test-20261024/data/benchmark-20261024T071517092458Z/batch32-OLS-EFO-full-r0-predictions.json	paper_benchmark.py export, 2026-10-31, from saved files
+Top-1 and Top-5 hits scored from the timed output vs accuracy-results.tsv	6	0	pass	testing folder/e12-optimization-test-20261024/data/benchmark-20261024T071517092458Z/batch32_dedup-UKBB-EFO-full-r0-predictions.json	paper_benchmark.py export, 2026-10-31, from saved files

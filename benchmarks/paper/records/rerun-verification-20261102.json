@@ -1,0 +1,18 @@
+{
+  "accuracy_run": "accuracy-20261102T172014490185Z",
+  "speed_run": "speed-20261102T172440749389Z",
+  "accuracy_conditions_equal_old": 18,
+  "accuracy_rows": 11693,
+  "rank_changes_against_old": 0,
+  "speed_conditions": 18,
+  "speed_calls": 111,
+  "speed_failures": 0,
+  "power": "mains",
+  "environment_sha256": "735273768111ef97b7cf34ac0d523d23593b4936b7d910960dcd9450eee77140",
+  "files": {
+    "accuracy-results-20261102.tsv": "b0b5bd79c1fcdf3ad62f7c826991e968fec032414b19ceeb05e8acceb4c93d7d",
+    "speed-results-20261102.tsv": "69bcfab842a25aeac77dd47e1e4f37dc42aa70007c59db09f1201819d9c4010a",
+    "accuracy-per-row-ranks-20261102.tsv": "69d474ab75cc022d83f3a69adab938c9b58bcea9ef1fd43b5ef3f0da39f3cf25",
+    "speed-timings-20261102.tsv": "c018e1e0d92bdbf0bde6996cff4cee8cf50ae0a89644e9a1ae62de03fe8a8157"
+  }
+}

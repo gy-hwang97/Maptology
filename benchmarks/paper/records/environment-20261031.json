@@ -1,0 +1,178 @@
+{
+  "package": {
+    "created": "2026-10-31",
+    "full_benchmark_rerun": false,
+    "statement": "results/ and raw/ were converted from saved, verified files. The full benchmark was not run again for this package. Accuracy comes from the 2026-10-21 run and speed from the single run dated 2026-10-24.",
+    "optimized_code": "The optimized implementation is an experimental implementation in this package. These results do not describe the deployed Maptology app."
+  },
+  "ontology": {
+    "name": "Experimental Factor Ontology (EFO)",
+    "version": "3.62.0",
+    "version_iri": "http://www.ebi.ac.uk/efo/releases/v3.62.0/efo.owl",
+    "source_url": "https://github.com/EBISPOT/efo/releases/download/v3.62.0/efo.owl",
+    "owl_sha256": "f87fc3cdbae7fac68c5b2a470ae81da59bec3fa98ada908c5262dc89edcdb0bc",
+    "owl_bytes": 206422888,
+    "note": "Hash calculated from the OWL file. It matches the efo-source.json, environment.json and t2t-cache-build.json records. inputs/efo-owl-sha256.txt in the 2026-10-16 run holds a different value and does not describe this file."
+  },
+  "search_target": {
+    "terms": 29374,
+    "base_iris": [
+      "http://www.ebi.ac.uk/efo/",
+      "http://purl.obolibrary.org/obo/MONDO",
+      "http://purl.obolibrary.org/obo/HP",
+      "http://www.orpha.net/ORDO",
+      "http://purl.obolibrary.org/obo/DOID"
+    ],
+    "common_target_sha256": "762b4d63eef533c0877a3b1b7f3f7c65c64e2823a87d8b61d2ac21cea9e979b1",
+    "e12_rows_one_per_name_or_synonym": 112511,
+    "verified_scope_sha256": "1e3d9c3edf8ca9ae911804d46a530d4b405d3c75f1715acb002ac15568891bb5"
+  },
+  "evaluation_selection": {
+    "sources": "UK Biobank to EFO mappings, Biomappings, and OLS mappings to EFO, as collected by the text2term evaluation repository",
+    "repository": "https://github.com/rsgoncalves/text2term-evaluation",
+    "commit": "b999dbb670fa13c9ceb1ba631a7abc7557f3293b",
+    "rules": "The selection rules of that evaluation code; counts by reason are in selection-manifest.json of the 2026-10-16 run."
+  },
+  "evaluation_data": {
+    "UKBB-EFO": {
+      "rows": 899,
+      "distinct_input_strings": 894,
+      "rows_with_gold_in_search_target": 825,
+      "rows_without_gold_iri": 1,
+      "speed_sample_size": 100,
+      "speed_sample_rule": "random.Random(20261021).sample over sorted distinct strings",
+      "source_file": "testing folder/published-benchmark-accuracy/run-2026-10-16-1159/inputs/eval-UKBB-EFO.csv",
+      "source_sha256": "0961d6a2acc92919bc0343fd650e262bb33f066abfddb4664406dbfe118c6bce",
+      "copied_csv_sha256": "6bb5653bbde716b8d49337c096c3510fef24ea933fbff1429d1631b5a01f6615"
+    },
+    "Biomappings": {
+      "rows": 796,
+      "distinct_input_strings": 795,
+      "rows_with_gold_in_search_target": 794,
+      "rows_without_gold_iri": 0,
+      "speed_sample_size": 100,
+      "speed_sample_rule": "random.Random(20261021).sample over sorted distinct strings",
+      "source_file": "testing folder/published-benchmark-accuracy/run-2026-10-16-1159/inputs/eval-Biomappings.csv",
+      "source_sha256": "8d6232d70b447735aadb01a504d4c6cc1a9931bb7d121eae2ef9175db72dc4b7",
+      "copied_csv_sha256": "1b3cd51af8a3348c6b6c1ac4b7b33f5fa35a31bd35a80fbdec869cc7e5e00eb4"
+    },
+    "OLS-EFO": {
+      "rows": 9998,
+      "distinct_input_strings": 7377,
+      "rows_with_gold_in_search_target": 8691,
+      "rows_without_gold_iri": 0,
+      "speed_sample_size": 100,
+      "speed_sample_rule": "random.Random(20261021).sample over sorted distinct strings",
+      "source_file": "testing folder/published-benchmark-accuracy/run-2026-10-16-1159/inputs/eval-OLS-EFO.csv",
+      "source_sha256": "3101787016c517ca525f384bab2b8dd76a719fa4cea9a4d613cc6a3c96b9543c",
+      "copied_csv_sha256": "03dbe60cde30b8181a77911b5a7aea2b145a677afb980284d1adbde698fd8a5f"
+    }
+  },
+  "method_conditions": {
+    "A": {
+      "method_name": "Original Maptology",
+      "document_unit": "merged: label + all synonyms per concept",
+      "vectorizer": "word (1,2), lowercase, stop_words='english'",
+      "exact_match_first": false
+    },
+    "B2": {
+      "method_name": "Original Maptology + exact-match priority",
+      "document_unit": "merged: label + all synonyms per concept",
+      "vectorizer": "word (1,2), lowercase, stop_words='english'",
+      "exact_match_first": true
+    },
+    "E1": {
+      "method_name": "Exact-match priority + separate names and synonyms",
+      "document_unit": "one row per label / synonym",
+      "vectorizer": "word (1,2), lowercase, stop_words='english'",
+      "exact_match_first": true
+    },
+    "E2": {
+      "method_name": "Exact-match priority + 3-character search",
+      "document_unit": "merged: label + all synonyms per concept",
+      "vectorizer": "char_wb (3,3), lowercase",
+      "exact_match_first": true
+    },
+    "E12": {
+      "method_name": "Exact-match priority + separate names and synonyms + 3-character search",
+      "document_unit": "one row per label / synonym",
+      "vectorizer": "char_wb (3,3), lowercase",
+      "exact_match_first": true
+    },
+    "T": {
+      "method_name": "text2term",
+      "document_unit": "installed text2term rows per label / synonym",
+      "vectorizer": "installed char_wb (3,3) with text2term normalisation; fit on source+target per call",
+      "exact_match_first": "text2term's own rules only"
+    }
+  },
+  "accuracy_run": {
+    "folder": "testing folder/ranking-experiments-20261021-034704",
+    "date": "2026-10-21",
+    "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "cpu_logical": 22,
+    "cpu_physical": 16,
+    "ram_total_gb": 16.51,
+    "packages": {
+      "numpy": "2.3.5",
+      "scipy": "1.18.0",
+      "sklearn": "1.8.0",
+      "pandas": "2.3.3",
+      "matplotlib": "3.11.1",
+      "ormsgpack": "1.12.2",
+      "psutil": "7.2.2",
+      "sparse_dot_topn": "1.2.0",
+      "gensim": "4.4.0",
+      "text2term": "4.5.0",
+      "owlready2": "0.50",
+      "bioregistry": "0.13.31"
+    },
+    "pythonhashseed": "0",
+    "top_n": 5,
+    "seed": 20261021,
+    "denominator": "Every evaluation row, for all six methods",
+    "correct_means": "The candidate IRI equals the gold_iri of that row. Deprecated gold terms are not replaced and compound UKBB cells are not split.",
+    "text2term_settings": {
+      "mapper": "TFIDF",
+      "max_mappings": 5,
+      "min_score": 0.0,
+      "excl_deprecated": true,
+      "use_cache": true,
+      "called_with": "the whole dataset in one call"
+    }
+  },
+  "speed_run": {
+    "run_id": "benchmark-20261024T071517092458Z",
+    "folder": "testing folder/e12-optimization-test-20261024/data/benchmark-20261024T071517092458Z",
+    "date": "2026-10-24",
+    "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+    "packages": {
+      "numpy": "2.3.5",
+      "scipy": "1.18.0",
+      "scikit-learn": "1.8.0",
+      "text2term": "4.5.0",
+      "psutil": "7.2.2"
+    },
+    "power": "mains",
+    "pythonhashseed": "0",
+    "machine": "Not repeated in the 2026-10-24 record; see accuracy_run for the machine recorded on 2026-10-21.",
+    "timer": "time.perf_counter around one Python call",
+    "design": "Sequential; one warm-up then five measured repeats per dataset, workload and condition; condition order rotated each repeat; AC power checked before and after every call.",
+    "outside_timers": [
+      "library imports",
+      "reading input files",
+      "loading the E12 index and exact-match lookup",
+      "preparing the transposed matrix",
+      "gc.collect before each call",
+      "comparing and writing outputs"
+    ],
+    "inside_timers": {
+      "optimized_e12": "vectorizing, multiplying, merging to terms, ranking, restoring rows",
+      "text2term": "reading the official cache, building TF-IDF, mapping, re-attaching candidates to rows"
+    },
+    "not_cleared": "Operating system file cache",
+    "not_measured": "Browser, Streamlit and network time"
+  }
+}

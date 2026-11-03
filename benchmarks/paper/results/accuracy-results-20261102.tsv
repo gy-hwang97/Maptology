@@ -1,0 +1,19 @@
+dataset	method_id	method_name	evaluation_rows	top1_hits	top1_percent	top5_hits	top5_percent	candidate_none	errors
+UKBB-EFO	A	Original Maptology	899	468	52.0578	658	73.1924	15	0
+UKBB-EFO	B2	Original Maptology + exact-match priority	899	507	56.3960	669	74.4160	15	0
+UKBB-EFO	E1	Exact-match priority + separate names and synonyms	899	541	60.1780	691	76.8632	15	0
+UKBB-EFO	E2	Exact-match priority + 3-character search	899	581	64.6274	715	79.5328	0	0
+UKBB-EFO	E12	Exact-match priority + separate names and synonyms + 3-character search	899	619	68.8543	737	81.9800	0	0
+UKBB-EFO	T	text2term	899	658	73.1924	760	84.5384	0	0
+Biomappings	A	Original Maptology	796	620	77.8894	675	84.7990	30	0
+Biomappings	B2	Original Maptology + exact-match priority	796	663	83.2915	683	85.8040	29	0
+Biomappings	E1	Exact-match priority + separate names and synonyms	796	658	82.6633	678	85.1759	29	0
+Biomappings	E2	Exact-match priority + 3-character search	796	723	90.8291	772	96.9849	0	0
+Biomappings	E12	Exact-match priority + separate names and synonyms + 3-character search	796	719	90.3266	767	96.3568	0	0
+Biomappings	T	text2term	796	632	79.3970	741	93.0905	1	0
+OLS-EFO	A	Original Maptology	9998	6832	68.3337	8062	80.6361	275	0
+OLS-EFO	B2	Original Maptology + exact-match priority	9998	7722	77.2354	8239	82.4065	275	0
+OLS-EFO	E1	Exact-match priority + separate names and synonyms	9998	7878	78.7958	8326	83.2767	275	0
+OLS-EFO	E2	Exact-match priority + 3-character search	9998	7964	79.6559	8425	84.2669	2	0
+OLS-EFO	E12	Exact-match priority + separate names and synonyms + 3-character search	9998	8078	80.7962	8522	85.2370	2	0
+OLS-EFO	T	text2term	9998	8058	80.5961	8489	84.9070	2	0
