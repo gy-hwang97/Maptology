@@ -2,6 +2,20 @@ This folder contains the code and result tables for a comparison between Maptolo
 
 These benchmarks were performed using input TSV files from the [text2term evaluation repository](https://github.com/rsgoncalves/text2term-evaluation/tree/b999dbb670fa13c9ceb1ba631a7abc7557f3293b), which links to the [UK Biobank to EFO mappings](https://github.com/EBISPOT/EFO-UKB-mappings), [Biomappings](https://github.com/biopragmatics/biomappings), and [OLS mapping downloads](https://www.ebi.ac.uk/ols4/downloads). The local `inputs/eval-*.tsv` files contain the selected search strings and correct term IDs. The local `inputs/speed-sample-*.tsv` files contain 100 fixed strings per dataset. Selection rules, counts, and hashes are recorded in `records/environment-20261031.json` and `records/environment-20261102.json`. These input TSV files are not included in this Git repository while their redistribution terms remain unconfirmed.
 
+`code/build_inputs.py` downloads the three source tables from the fixed text2term evaluation commit linked above. It saves them under `sources/`, checks their SHA-256 hashes, and creates the six input TSV files under `inputs/`. It checks the recreated inputs against the hashes in `records/environment-20261102.json`. If an existing source or input file has a different hash, the script stops instead of replacing it.
+
+For UKBB-EFO, it keeps `MAPPING_TYPE == "Exact"` and excludes mapping cells containing a comma or `||`, selecting 899 of 1,565 rows. For Biomappings, it keeps EFO targets with `skos:exactMatch`, selecting 796 of 10,431 rows. For OLS-EFO, it skips the 112-line comment block and excludes rows without `object_label`, selecting 9,998 of 35,028 rows. It converts reference IDs to IRIs with Bioregistry. Unresolved references stay in the input with an empty IRI, and repeated rows are kept.
+
+The three speed-sample files use the same 100 distinct strings as before, selected with `random.Random(20261021)` from sorted distinct strings. Each execution writes the source URLs, row counts, hashes, and package versions to `runs/inputs-<time>/input-verification.json`. The completed download check is recorded in `records/input-download-verification-20261109.json`: all three source files were downloaded, and all six generated inputs matched the earlier benchmark files exactly.
+
+Input generation was tested with Python 3.13, pandas 2.3.3, and Bioregistry 0.13.31. From `benchmarks/paper`, run:
+
+```powershell
+python -B code\build_inputs.py
+```
+
+This command prepares the inputs. The search benchmarks are run separately using the commands below.
+
 The accuracy test uses UKBB-EFO (899 rows), Biomappings (796 rows), and OLS-EFO (9,998 rows). All six methods search the same 29,374 terms from EFO 3.62.0 and return up to five suggestions. A correct term that is outside this search set stays in the test and counts as a miss.
 
 The original Maptology method, called `A` in the result files, searches words in each ontology term's name and synonyms as one combined text. `B2` uses the same search technique but puts terms with an exact matching name or synonym first. `E1` starts with `B2` and then searches each name and synonym as a separate text instead of combining them. `E2` starts with `B2` and searches overlapping groups of three characters (3-grams) instead of whole words. `E12` uses both techniques: it searches each name and synonym separately using 3-grams, and it keeps the exact-match priority of `B2`. `T` is text2term 4.5.0, called through its official TF-IDF API. `E12` and text2term share some search ideas, but they use different implementations.
@@ -38,4 +52,4 @@ python -B code\prepare_upload.py runs\accuracy-20261102T172014490185Z runs\speed
 
 The dated TSV files in `results/` are the current paper results. The undated accuracy summary is an earlier result that `run_accuracy.py` and `prepare_upload.py` read during their checks. `prepare_upload.py` also needs the earlier local row rank file. The full `runs/` folders stay local and are excluded from Git.
 
-These public evaluation sets were used during method development, so the results are not an independent validation. The text2term paper used version 4.1.2, while this benchmark used 4.5.0. The benchmark code is separate from the deployed Maptology app. The published code and TSV tables document the measurements, but this repository alone cannot run the full benchmark on another computer. The fixed input files and saved search assets must first be obtained or rebuilt.
+These public evaluation sets were used during method development, so the results are not an independent validation. The text2term paper used version 4.1.2, while this benchmark used 4.5.0. The benchmark code is separate from the deployed Maptology app. The published code and TSV tables document the measurements. The fixed input files can now be recreated with `code/build_inputs.py`. A full benchmark run on another computer still requires the saved search assets listed in `records/required-assets.tsv`.

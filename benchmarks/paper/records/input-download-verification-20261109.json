@@ -1,0 +1,81 @@
+{
+  "status": "complete",
+  "source_commit": "b999dbb670fa13c9ceb1ba631a7abc7557f3293b",
+  "sample_seed": 20261021,
+  "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+  "pandas": "2.3.3",
+  "bioregistry": "0.13.31",
+  "datasets": {
+    "UKBB-EFO": {
+      "url": "https://raw.githubusercontent.com/rsgoncalves/text2term-evaluation/b999dbb670fa13c9ceb1ba631a7abc7557f3293b/data/UK_Biobank_master_file.tsv",
+      "source_sha256": "6a111561366f01c5b5ed8bc81b958341896393febb9edbe5b9c195f1dcf1bed6",
+      "download": "downloaded_and_verified",
+      "original_rows": 1565,
+      "excluded": {
+        "mapping_contains_comma": 36,
+        "mapping_contains_double_pipe": 11,
+        "mapping_type_not_exact": 619
+      },
+      "selected_rows": 899,
+      "distinct_strings": 894,
+      "unresolved_reference_ids": 1
+    },
+    "Biomappings": {
+      "url": "https://raw.githubusercontent.com/rsgoncalves/text2term-evaluation/b999dbb670fa13c9ceb1ba631a7abc7557f3293b/data/biomappings.tsv",
+      "source_sha256": "8eca8ddcd235197ac20eff43c6775ab7c9bf486d020603b734e76c396c2890e0",
+      "download": "downloaded_and_verified",
+      "original_rows": 10431,
+      "excluded": {
+        "target_not_efo": 9634,
+        "relation_not_exact_match": 1
+      },
+      "selected_rows": 796,
+      "distinct_strings": 795,
+      "unresolved_reference_ids": 0
+    },
+    "OLS-EFO": {
+      "url": "https://raw.githubusercontent.com/rsgoncalves/text2term-evaluation/b999dbb670fa13c9ceb1ba631a7abc7557f3293b/data/efo.ols.sssom.tsv",
+      "source_sha256": "a5be5b487c0003713cda5c704a4d8a321229eafbb42c7966cffd004d4049c643",
+      "download": "downloaded_and_verified",
+      "original_rows": 35028,
+      "excluded": {
+        "missing_object_label": 25030
+      },
+      "selected_rows": 9998,
+      "distinct_strings": 7377,
+      "unresolved_reference_ids": 0
+    }
+  },
+  "outputs": {
+    "eval-UKBB-EFO.tsv": {
+      "sha256": "b5aa35bb07275d5e52857efd886b7bff76b56b5dd96e5579ad175ccecec978ca",
+      "rows": 899,
+      "matches_existing_benchmark": true
+    },
+    "speed-sample-UKBB-EFO.tsv": {
+      "sha256": "e20e2254522812a3575d142377024a23238e92fc42c1480901a9afe0fe4a5c30",
+      "rows": 100,
+      "matches_existing_benchmark": true
+    },
+    "eval-Biomappings.tsv": {
+      "sha256": "ea73015a9da60239cc325fa1468d1389ffa6196c069a55f38ae29b1044ed1e4a",
+      "rows": 796,
+      "matches_existing_benchmark": true
+    },
+    "speed-sample-Biomappings.tsv": {
+      "sha256": "86456071f59430e6319d0247eca9588d4e9e8e92e7ff72d91d1a72ffd8205d39",
+      "rows": 100,
+      "matches_existing_benchmark": true
+    },
+    "eval-OLS-EFO.tsv": {
+      "sha256": "f4e4c79b8606fc9f18cb75c96a179a246248b0f6e15608c69ab8d5a038529b1b",
+      "rows": 9998,
+      "matches_existing_benchmark": true
+    },
+    "speed-sample-OLS-EFO.tsv": {
+      "sha256": "3cecdbbe59f95dcf8b9cfbd7516d35fe60e8b684c3d7822e0a52868f1c81ce11",
+      "rows": 100,
+      "matches_existing_benchmark": true
+    }
+  }
+}

@@ -5,3 +5,4 @@ records/file-provenance.tsv
 inputs/*.tsv
 raw/accuracy-per-row-ranks*.tsv
 raw/speed-timings.tsv
+sources/
