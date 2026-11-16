@@ -1,5 +1,3 @@
-"""Run the E12 search on small groups of input strings."""
-
 import copy
 
 import numpy as np

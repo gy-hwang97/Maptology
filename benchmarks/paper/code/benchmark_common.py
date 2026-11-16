@@ -1,7 +1,6 @@
-"""Small file and environment helpers for the paper benchmarks."""
-
 import csv
 import hashlib
+import json
 import json
 import os
 import sys
@@ -17,7 +16,7 @@ CODE_DIR = Path(__file__).resolve().parent
 PACKAGE_DIR = CODE_DIR.parent
 INPUT_DIR = PACKAGE_DIR / "inputs"
 RUN_DIR = PACKAGE_DIR / "runs"
-ASSET_DIR = os.environ.get("MAPTOLOGY_BENCHMARK_ASSETS", "")
+ASSET_DIR = os.environ.get("MAPTOLOGY_BENCHMARK_ASSETS", str(PACKAGE_DIR / "assets"))
 DATASETS = ("UKBB-EFO", "Biomappings", "OLS-EFO")
 METHODS = ("A", "B2", "E1", "E2", "E12", "T")
 NAMES = {
@@ -89,6 +88,17 @@ def check_assets(include_all_indexes):
     folder = Path(ASSET_DIR)
     if not folder.is_dir():
         raise RuntimeError("The asset folder does not exist: " + str(folder))
+
+    manifest = folder / "asset-manifest.json"
+    if manifest.is_file():
+        with manifest.open(encoding="utf-8") as handle:
+            report = json.load(handle)
+        if report["target_terms"] != 29374:
+            raise RuntimeError("The benchmark requires 29,374 target terms")
+        for name, digest in report["files"].items():
+            if sha256(folder / name) != digest:
+                raise RuntimeError("Benchmark asset changed: " + name)
+        return folder
 
     records = read_tsv(PACKAGE_DIR / "records" / "required-assets.tsv")
     for record in records:

@@ -1,5 +1,3 @@
-"""Run all six accuracy methods on the fixed paper inputs."""
-
 import argparse
 import os
 import sys

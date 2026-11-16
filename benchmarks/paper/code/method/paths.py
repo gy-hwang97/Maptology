@@ -1,14 +1,9 @@
-"""Asset locations for the search code in this folder.
-
-Set MAPTOLOGY_BENCHMARK_ASSETS to the existing testing folder. The sizes and
-SHA-256 hashes of required files are in records/required-assets.tsv.
-"""
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TESTING = os.environ.get("MAPTOLOGY_BENCHMARK_ASSETS")
 if not TESTING:
-    TESTING = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+    TESTING = os.path.join(os.path.dirname(os.path.dirname(HERE)), "assets")
 TESTING = os.path.abspath(TESTING)
 
 FROZEN_INDEX = os.path.join(TESTING, "published-benchmark-accuracy", "run-2026-10-16-1159", "cache", "EFO")
@@ -18,6 +13,13 @@ FROZEN_LOOKUP = os.path.join(os.path.dirname(FROZEN_INDEX), "exact-lookup-EFO.js
 RANKING_RUN = os.path.join(TESTING, "ranking-experiments-20261021-034704")
 INDEX = os.path.join(RANKING_RUN, "index")
 T2T_CACHE = os.path.join(RANKING_RUN, "cache", "t2t")
+
+if os.path.isfile(os.path.join(TESTING, "asset-manifest.json")):
+    FROZEN_INDEX = os.path.join(TESTING, "EFO")
+    FROZEN_TERMS = os.path.join(FROZEN_INDEX, "EFO_terms.ormsgpack")
+    FROZEN_LOOKUP = os.path.join(TESTING, "exact-lookup-EFO.json")
+    INDEX = os.path.join(TESTING, "index")
+    T2T_CACHE = os.path.join(TESTING, "t2t")
 
 ONTOLOGY = "EFO"
 TOP_N = 5

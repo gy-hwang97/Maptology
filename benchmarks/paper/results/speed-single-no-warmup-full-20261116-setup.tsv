@@ -1,0 +1,8 @@
+group_id	dataset	workload	method_id	repeat	attempt	selected_attempt	status	process_id	prepare_seconds	power_before	power_after
+group-001	UKBB-EFO	All evaluation rows	E12	1	groups/group-001/attempt-001	True	complete	24640	0.45161569997435436	mains	mains
+group-002	UKBB-EFO	All evaluation rows	T	1	groups/group-002/attempt-001	True	complete	13952	0.3657952999928966	mains	mains
+group-003	Biomappings	All evaluation rows	T	1	groups/group-003/attempt-001	True	complete	25152	0.3936593000253197	mains	mains
+group-004	Biomappings	All evaluation rows	E12	1	groups/group-004/attempt-001	True	complete	33704	0.3679951000085566	mains	mains
+group-005	OLS-EFO	All evaluation rows	E12	1	groups/group-005/attempt-001	True	complete	33628	0.34876530000474304	mains	mains
+group-006	OLS-EFO	All evaluation rows	T	1	groups/group-006/attempt-001	False	stopped	10540	0.5138870000082534	mains	mains
+group-006	OLS-EFO	All evaluation rows	T	1	groups/group-006/attempt-002	True	complete	28452	0.2498222000140231	mains	mains

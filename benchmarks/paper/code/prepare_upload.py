@@ -1,5 +1,3 @@
-"""Check a new full run and place its TSV files beside the older tables."""
-
 import argparse
 import importlib.metadata
 import os

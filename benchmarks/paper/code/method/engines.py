@@ -1,20 +1,3 @@
-"""Search functions for A, B2, E1, E2, E12 and the text2term adapter.
-
-A and B2 use the same candidate selection, positive-score rule, tie-break,
-and merge order as the archived accuracy benchmark. They read its frozen
-word-merged index.
-
-E1 / E2 / E12 read the indexes built by build_indexes.py. Their candidate rule
-is fixed in protocol.md section 2: every concept with score > 0, ordered by
-(-score, label, iri), cut at TOP_N, then the same exact-match-first merge as
-B2 using the shared frozen lookup (string -> concept row numbers).
-
-For the separate-alias indexes the alias-row scores are aggregated to the
-concept by MAXIMUM over all alias rows (no truncation before aggregation).
-
-Counters: CALLS counts transform / linear_kernel / vectorizer fit calls; they
-are only switched on by the verification step, never while timing.
-"""
 import json
 import os
 import pickle
@@ -34,7 +17,6 @@ _ORIG_FIT, _ORIG_FIT_TRANSFORM = TfidfVectorizer.fit, TfidfVectorizer.fit_transf
 
 
 def instrument(on=True):
-    """Count calls (verification only). Also counts any vectorizer fit."""
     global _COUNTING
     _COUNTING = on
     CALLS.update(transform=0, linear_kernel=0, fit=0, fit_transform=0)
@@ -51,24 +33,17 @@ def instrument(on=True):
         TfidfVectorizer.fit, TfidfVectorizer.fit_transform = _ORIG_FIT, _ORIG_FIT_TRANSFORM
 
 
-# ------------------------------------------------------------------- loaders
 def load_terms():
     with open(paths.FROZEN_TERMS, "rb") as fh:
         return ormsgpack.unpackb(fh.read())
 
 
 def load_lookup():
-    """B2 / E1 / E2 / E12 only: string (strip only) -> concept row numbers."""
     with open(paths.FROZEN_LOOKUP, "r", encoding="utf-8") as fh:
         return json.load(fh)
 
 
 def load_index(kind):
-    """kind in word-merged | word-separate | char-merged | char-separate.
-
-    word-merged is the frozen accuracy-run index (A and B2). The others come
-    from this run's index/ folder. Every state carries the concept terms in
-    the frozen order, plus label/iri arrays for the explicit tie rule."""
     folder = paths.index_dir(kind)
     prefix = kind
     if kind == "word-merged":
@@ -95,7 +70,6 @@ def load_index(kind):
     return state
 
 
-# ---------------------------------------------------------------- A and B2
 def _row(term, score):
     return {"Preferred Label": term.get("label", ""),
             "Ontology Term URI": term.get("iri", "N/A"),
@@ -108,7 +82,6 @@ def _key(terms, index):
 
 
 def search_A(state, text, top_n=paths.TOP_N):
-    """Verbatim app path: transform, linear_kernel, argsort, score>0, final sort."""
     text = str(text).strip()
     if not text:
         return [], None
@@ -177,12 +150,10 @@ def search_B2(state, lookup, text, top_n=paths.TOP_N):
     return (front + tail)[:top_n], diag
 
 
-# ------------------------------------------------------------ E1 / E2 / E12
 PARTITION = 200
 
 
 def concept_scores_for(state, text):
-    """Query -> score per concept (max over alias rows for separate indexes)."""
     query_vector = state["vectorizer"].transform([text])
     if _COUNTING:
         CALLS["transform"] += 1
@@ -197,11 +168,6 @@ def concept_scores_for(state, text):
 
 
 def ranked_concepts(state, concept_scores, top_n=paths.TOP_N):
-    """Concepts with score > 0 ordered by (-score, label, iri); first top_n.
-
-    Exact: a partition of the top PARTITION scores is sorted with the full
-    key; if the top_n-th score ties with the smallest partitioned score the
-    full sort is used instead, so no tie can be cut off by the partition."""
     positive = np.flatnonzero(concept_scores > 0)
     if positive.size == 0:
         return []
@@ -222,7 +188,6 @@ def ranked_concepts(state, concept_scores, top_n=paths.TOP_N):
 
 
 def search_E(state, lookup, text, top_n=paths.TOP_N):
-    """E1 / E2 / E12: ranked concepts + B2-style exact-match-first merge."""
     text = str(text).strip()
     diag = dict(exact_rows=0, ambiguous=False, zero_score_added=0, positive=0)
     if not text:
@@ -266,7 +231,6 @@ def search_E(state, lookup, text, top_n=paths.TOP_N):
     return (front + tail)[:top_n], diag
 
 
-# -------------------------------------------------------- unified interface
 def search(condition, state, lookup, text):
     if condition == "A":
         rows, _ = search_A(state, text)
@@ -282,7 +246,6 @@ def search(condition, state, lookup, text):
 
 
 def load_for(condition):
-    """(state, lookup) for a Maptology-side condition. A never loads the lookup."""
     state = load_index(paths.INDEX_OF[condition])
     lookup = None
     if condition != "A":
@@ -290,9 +253,7 @@ def load_for(condition):
     return state, lookup
 
 
-# ----------------------------------------------------------------- text2term
 def t2t_map(strings, ids, cache_folder=None):
-    """One official map_terms call against the cache built in this run."""
     import text2term
     from text2term import Mapper
     folder = paths.T2T_CACHE
@@ -307,13 +268,6 @@ def t2t_map(strings, ids, cache_folder=None):
 
 
 def t2t_relink(frame, ids, strings):
-    """Attach candidates to every requested row by exact input string.
-
-    text2term 4.5.0 groups on the source STRING, so a repeated string's later
-    id can come back empty while its candidates sit on an earlier id. Repair
-    by exact string equality (strip only), keep first order, drop duplicate
-    IRIs, cap at TOP_N. Disagreeing outputs for one string are a conflict,
-    never resolved by picking one. Returns (id, iris, scores, status, note)."""
     col = "Mapped Term CURIE"
     if "Mapped Term IRI" in frame.columns:
         col = "Mapped Term IRI"

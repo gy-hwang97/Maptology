@@ -1,0 +1,7 @@
+dataset	workload	method_id	repeat	group_id	input_rows	successful_requests	complete	total_search_seconds	first_search_seconds	attempts	discarded_attempt_requests	failed_or_ineligible_requests
+UKBB-EFO	All evaluation rows	E12	1	group-001	899	899	True	4.30506009949022	0.006620300002396107	1	0	0
+UKBB-EFO	All evaluation rows	T	1	group-002	899	899	True	3474.267762599804	5.17377680001664	1	0	0
+Biomappings	All evaluation rows	T	1	group-003	796	796	True	2485.2164888997795	5.227001799998106	1	0	0
+Biomappings	All evaluation rows	E12	1	group-004	796	796	True	3.2119489997567143	0.005139600019901991	1	0	0
+OLS-EFO	All evaluation rows	E12	1	group-005	9998	9998	True	41.422446697426494	0.006453700014390051	1	0	0
+OLS-EFO	All evaluation rows	T	1	group-006	9998	9998	True	25044.520040399657	3.244948800012935	2	2671	1

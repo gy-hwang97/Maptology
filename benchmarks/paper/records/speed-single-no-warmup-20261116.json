@@ -1,0 +1,518 @@
+{
+  "protocol": "single-no-warmup-v1",
+  "runs": {
+    "sample": {
+      "settings": {
+        "protocol": "single-no-warmup-v1",
+        "workloads": "sample",
+        "repeats": 1,
+        "sample": false,
+        "warmup_queries": 0,
+        "input_hashes": {
+          "eval-Biomappings.tsv": "ea73015a9da60239cc325fa1468d1389ffa6196c069a55f38ae29b1044ed1e4a",
+          "eval-OLS-EFO.tsv": "f4e4c79b8606fc9f18cb75c96a179a246248b0f6e15608c69ab8d5a038529b1b",
+          "eval-UKBB-EFO.tsv": "b5aa35bb07275d5e52857efd886b7bff76b56b5dd96e5579ad175ccecec978ca",
+          "speed-sample-Biomappings.tsv": "86456071f59430e6319d0247eca9588d4e9e8e92e7ff72d91d1a72ffd8205d39",
+          "speed-sample-OLS-EFO.tsv": "3cecdbbe59f95dcf8b9cfbd7516d35fe60e8b684c3d7822e0a52868f1c81ce11",
+          "speed-sample-UKBB-EFO.tsv": "e20e2254522812a3575d142377024a23238e92fc42c1480901a9afe0fe4a5c30"
+        },
+        "code_hashes": {
+          "benchmark_common.py": "9010340db6d2dd18e5486d2460f8116b9658a5156b6a6f5f39460b796cab8340",
+          "build_inputs.py": "61ba425141333a5a97a3c123cf598877ff43f6ad63b486bc594ee0250ef737aa",
+          "prepare_assets.py": "9d9fbf53dde916cdfdf831dc60badcb421803e7e0ceba0edbc169b828dd55f63",
+          "prepare_upload.py": "7f3811d695c42fb81a0295beed1b4faa2f6ad5f21e899c95632b5193a9b8e00e",
+          "run_accuracy.py": "a9af24c13244f3e5d01298c7906ebf0039c045df22505c9bd5ca2c8050d22931",
+          "run_speed.py": "68987a7dcbe0252b95e6e74481cf024b42de704826798365b73d591755d63cf2",
+          "single_search.py": "92f43aabdd9e22b0c1d2082437e7ffa046754ff8ae3c8255b7cca3a49717e17a",
+          "single_speed_worker.py": "141c1ad03e251f7c3331a2918a29aa5963203120bd39204d8279b44398a7db4b",
+          "verify_single_search.py": "8ac1ea6c04e8152ae10af13ecdc3bff0356cb7e9402b9e2edb0c75089d8ed82a",
+          "verify_speed_run.py": "b185c33963b193780ad68c41900da381e17494a2636f90baf2e43e7d46287559",
+          "method/common.py": "f89c1ff6c40b45c261552b9bb375696d9f1194255ee04ffeceb39b6ff5dbbe3c",
+          "method/engines.py": "662606d38bfa8926018963f87f27f98def444aaeee8cc60d8509eabcffae82c1",
+          "method/optimized.py": "55eee307cce0368ff799631db74e4c8fbf99ded0da74205734faf6f0de0b0102",
+          "method/paths.py": "951415d7e7f07eca14ab7432a36f1d30736bf440f5fa6fbb6a779af6e5f92de6"
+        },
+        "asset_manifest_sha256": "090e1e3eeb5c1ed44a5de9f6d22baaa9846464a171c90e9f09625c723ed0008a"
+      },
+      "status": "complete",
+      "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+      "packages": {
+        "text2term": "4.5.0",
+        "numpy": "2.3.5",
+        "scipy": "1.18.0",
+        "scikit-learn": "1.8.0",
+        "pandas": "2.3.3",
+        "psutil": "7.2.2",
+        "sparse-dot-topn": "1.2.0"
+      },
+      "logical_cpus": 22,
+      "physical_cpus": 16,
+      "power_at_start": "mains",
+      "search_target": "EFO 3.62.0, 29,374 common terms",
+      "max_mappings": 5,
+      "text2term_min_score": 0.0,
+      "deduplicate_requests": false,
+      "process_policy": "New process for each method, dataset, workload and repeat; retained across its requests",
+      "cold_start_definition": "First search after loading existing assets in a new process; no earlier search in that process",
+      "timer_includes": "One search and candidate generation, including any lazy first-search initialization",
+      "timer_excludes": "Imports, input loading, index and ontology loading, mapper construction, matrix preparation, output serialization and validation",
+      "text2term_call": "TFIDFMapper.map on one input; TF-IDF fitting remains inside each call",
+      "maptology_call": "OptimizedE12.single on one input; no saved query results",
+      "os_file_cache_cleared": false,
+      "hard_per_query_timeout_seconds": null,
+      "estimate": {
+        "seconds": 711.4624688800657,
+        "measured_requests": 600,
+        "source": "Previous warmed timings on the reference laptop; no searches run for this estimate"
+      },
+      "active_group": "group-006",
+      "power_at_end": "mains",
+      "updated_at_utc": "2026-11-16T02:08:07.033089+00:00",
+      "source_run": "speed-single-cold-20261116T015010338559Z",
+      "verification": {
+        "status": "passed",
+        "started_at_utc": "2026-11-16T02:07:21.962132+00:00",
+        "finished_at_utc": "2026-11-16T02:08:05.382272+00:00",
+        "measured_requests": 600,
+        "completed_groups": 6,
+        "fresh_search_processes": 6,
+        "warmup_searches": 0,
+        "first_search_included_in_total": true,
+        "raw_totals_and_means_match_summary": true,
+        "code_inputs_and_assets_unchanged": true,
+        "E12_rows_checked": 300,
+        "E12_distinct_inputs_checked": 300,
+        "text2term_official_single_API_checks": 9,
+        "candidate_order_and_score_mismatches": 0,
+        "rtol": 1e-12,
+        "atol": 1e-12,
+        "discarded_attempt_requests": 0,
+        "failed_or_ineligible_attempt_requests": 0,
+        "note": "Validation ran after all timing in a separate process. This is not an accuracy evaluation."
+      },
+      "raw_export": {
+        "rows": 600,
+        "discarded_attempt_requests": 0,
+        "failed_or_ineligible_discarded_requests": 0,
+        "columns": [
+          "dataset",
+          "workload",
+          "method_id",
+          "repeat",
+          "request_index",
+          "input_rows_per_round",
+          "group_id",
+          "process_id",
+          "first_search",
+          "power_before",
+          "power_after",
+          "eligible",
+          "status",
+          "seconds",
+          "error",
+          "attempt",
+          "selected_attempt"
+        ],
+        "all_exported_cells_unchanged": true,
+        "totals_and_means_recalculated": true,
+        "omitted_columns": [
+          "row_id",
+          "input_key",
+          "candidates"
+        ]
+      },
+      "source_file_hashes": {
+        "status.json": "73a474cc5548915d6f4cc0dcf7bc0e74faa65b547c10e5661740e722ffa32e95",
+        "verification.json": "0e7776ba24dee90576c2ff3f9a2cd69987b3f2785bb8a89af401decaf1efab15",
+        "speed-results.tsv": "a96be63beb6a2670b4e0af569c098ca738ea1864765c5aae9f0f1021f7e8c584",
+        "speed-rounds.tsv": "2abe46b27a7654c144a0e92f04f9d14ebc89f9045d4bfd7789e0c73255da2b56",
+        "setup-times.tsv": "486be148e61d9c53e4f7f841415df35882aaaf6b6f0b56b42ed344897483e574",
+        "speed-timings.tsv": "1e89bf627509392dacabea43ce92ed2ea9c382de231b6677dee2a5c8ba4d62fc"
+      }
+    },
+    "full": {
+      "settings": {
+        "protocol": "single-no-warmup-v1",
+        "workloads": "full",
+        "repeats": 1,
+        "sample": false,
+        "warmup_queries": 0,
+        "input_hashes": {
+          "eval-Biomappings.tsv": "ea73015a9da60239cc325fa1468d1389ffa6196c069a55f38ae29b1044ed1e4a",
+          "eval-OLS-EFO.tsv": "f4e4c79b8606fc9f18cb75c96a179a246248b0f6e15608c69ab8d5a038529b1b",
+          "eval-UKBB-EFO.tsv": "b5aa35bb07275d5e52857efd886b7bff76b56b5dd96e5579ad175ccecec978ca",
+          "speed-sample-Biomappings.tsv": "86456071f59430e6319d0247eca9588d4e9e8e92e7ff72d91d1a72ffd8205d39",
+          "speed-sample-OLS-EFO.tsv": "3cecdbbe59f95dcf8b9cfbd7516d35fe60e8b684c3d7822e0a52868f1c81ce11",
+          "speed-sample-UKBB-EFO.tsv": "e20e2254522812a3575d142377024a23238e92fc42c1480901a9afe0fe4a5c30"
+        },
+        "code_hashes": {
+          "benchmark_common.py": "9010340db6d2dd18e5486d2460f8116b9658a5156b6a6f5f39460b796cab8340",
+          "build_inputs.py": "61ba425141333a5a97a3c123cf598877ff43f6ad63b486bc594ee0250ef737aa",
+          "prepare_assets.py": "9d9fbf53dde916cdfdf831dc60badcb421803e7e0ceba0edbc169b828dd55f63",
+          "prepare_upload.py": "7f3811d695c42fb81a0295beed1b4faa2f6ad5f21e899c95632b5193a9b8e00e",
+          "run_accuracy.py": "a9af24c13244f3e5d01298c7906ebf0039c045df22505c9bd5ca2c8050d22931",
+          "run_speed.py": "68987a7dcbe0252b95e6e74481cf024b42de704826798365b73d591755d63cf2",
+          "single_search.py": "92f43aabdd9e22b0c1d2082437e7ffa046754ff8ae3c8255b7cca3a49717e17a",
+          "single_speed_worker.py": "141c1ad03e251f7c3331a2918a29aa5963203120bd39204d8279b44398a7db4b",
+          "verify_single_search.py": "8ac1ea6c04e8152ae10af13ecdc3bff0356cb7e9402b9e2edb0c75089d8ed82a",
+          "verify_speed_run.py": "b185c33963b193780ad68c41900da381e17494a2636f90baf2e43e7d46287559",
+          "method/common.py": "f89c1ff6c40b45c261552b9bb375696d9f1194255ee04ffeceb39b6ff5dbbe3c",
+          "method/engines.py": "662606d38bfa8926018963f87f27f98def444aaeee8cc60d8509eabcffae82c1",
+          "method/optimized.py": "55eee307cce0368ff799631db74e4c8fbf99ded0da74205734faf6f0de0b0102",
+          "method/paths.py": "951415d7e7f07eca14ab7432a36f1d30736bf440f5fa6fbb6a779af6e5f92de6"
+        },
+        "asset_manifest_sha256": "090e1e3eeb5c1ed44a5de9f6d22baaa9846464a171c90e9f09625c723ed0008a"
+      },
+      "status": "complete",
+      "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+      "packages": {
+        "text2term": "4.5.0",
+        "numpy": "2.3.5",
+        "scipy": "1.18.0",
+        "scikit-learn": "1.8.0",
+        "pandas": "2.3.3",
+        "psutil": "7.2.2",
+        "sparse-dot-topn": "1.2.0"
+      },
+      "logical_cpus": 22,
+      "physical_cpus": 16,
+      "power_at_start": "mains",
+      "search_target": "EFO 3.62.0, 29,374 common terms",
+      "max_mappings": 5,
+      "text2term_min_score": 0.0,
+      "deduplicate_requests": false,
+      "process_policy": "New process for each method, dataset, workload and repeat; retained across its requests",
+      "cold_start_definition": "First search after loading existing assets in a new process; no earlier search in that process",
+      "timer_includes": "One search and candidate generation, including any lazy first-search initialization",
+      "timer_excludes": "Imports, input loading, index and ontology loading, mapper construction, matrix preparation, output serialization and validation",
+      "text2term_call": "TFIDFMapper.map on one input; TF-IDF fitting remains inside each call",
+      "maptology_call": "OptimizedE12.single on one input; no saved query results",
+      "os_file_cache_cleared": false,
+      "hard_per_query_timeout_seconds": null,
+      "estimate": {
+        "seconds": 27874.57178744766,
+        "measured_requests": 23386,
+        "source": "Previous warmed timings on the reference laptop; no searches run for this estimate"
+      },
+      "active_group": "group-006",
+      "power_at_end": "mains",
+      "updated_at_utc": "2026-11-16T12:56:55.359315+00:00",
+      "source_run": "speed-single-cold-20261116T020809229031Z",
+      "verification": {
+        "status": "passed",
+        "started_at_utc": "2026-11-16T12:56:10.434990+00:00",
+        "finished_at_utc": "2026-11-16T12:56:53.750634+00:00",
+        "measured_requests": 23386,
+        "completed_groups": 6,
+        "fresh_search_processes": 6,
+        "warmup_searches": 0,
+        "first_search_included_in_total": true,
+        "raw_totals_and_means_match_summary": true,
+        "code_inputs_and_assets_unchanged": true,
+        "E12_rows_checked": 11693,
+        "E12_distinct_inputs_checked": 8890,
+        "text2term_official_single_API_checks": 9,
+        "candidate_order_and_score_mismatches": 0,
+        "rtol": 1e-12,
+        "atol": 1e-12,
+        "discarded_attempt_requests": 2671,
+        "failed_or_ineligible_attempt_requests": 1,
+        "note": "Validation ran after all timing in a separate process. This is not an accuracy evaluation."
+      },
+      "raw_export": {
+        "rows": 26057,
+        "discarded_attempt_requests": 2671,
+        "failed_or_ineligible_discarded_requests": 1,
+        "columns": [
+          "dataset",
+          "workload",
+          "method_id",
+          "repeat",
+          "request_index",
+          "input_rows_per_round",
+          "group_id",
+          "process_id",
+          "first_search",
+          "power_before",
+          "power_after",
+          "eligible",
+          "status",
+          "seconds",
+          "error",
+          "attempt",
+          "selected_attempt"
+        ],
+        "all_exported_cells_unchanged": true,
+        "totals_and_means_recalculated": true,
+        "omitted_columns": [
+          "row_id",
+          "input_key",
+          "candidates"
+        ]
+      },
+      "source_file_hashes": {
+        "status.json": "fb8014ed26886bcecf1bb2b81cef2f426e2c4ba88c50b20f55ee9d5f4cf836a2",
+        "verification.json": "80ace8e578f80c27271e49ec09e28bf4c105cb094a147795d4b409c0911df21d",
+        "speed-results.tsv": "aad4b3eeb810d4f5d76185f43b2223681564e0d3d215d3efaff3c8f7438b5803",
+        "speed-rounds.tsv": "8574fff2751a493e48ee70a5fa6957c3a0e429ae6cc62d4399e06c5beaecea81",
+        "setup-times.tsv": "0433c707c51b20c32b0764c5250e4d5a2fe76f4a25d2c007031be933268e1010",
+        "speed-timings.tsv": "7b1a7243373434006addae319e32b56a794a0d7cc634ebbf53497503502a58da"
+      }
+    }
+  },
+  "files": {
+    "benchmarks/paper/code/benchmark_common.py": {
+      "sha256": "bee888e091aeb61209b0b5b3b1d6f7d0515dc9ba1965a0ab46fbd3788c77f390",
+      "bytes": 4638
+    },
+    "benchmarks/paper/code/method/common.py": {
+      "sha256": "2860ea8ce594c8d89e3b24904487dbb7baa4e885ea3f68bfff731948880cc3c8",
+      "bytes": 22
+    },
+    "benchmarks/paper/code/method/engines.py": {
+      "sha256": "da3586eda9f8d0e9e94943157c60f9e0437e760f9845d037e57ddf8caee7cd81",
+      "bytes": 10732
+    },
+    "benchmarks/paper/code/method/optimized.py": {
+      "sha256": "dadac3cc3f863d994b6088941ef5a781d79366143b2334feaadc114b3b26f4ed",
+      "bytes": 5155
+    },
+    "benchmarks/paper/code/method/paths.py": {
+      "sha256": "951415d7e7f07eca14ab7432a36f1d30736bf440f5fa6fbb6a779af6e5f92de6",
+      "bytes": 1485
+    },
+    "benchmarks/paper/code/prepare_assets.py": {
+      "sha256": "9d9fbf53dde916cdfdf831dc60badcb421803e7e0ceba0edbc169b828dd55f63",
+      "bytes": 6026
+    },
+    "benchmarks/paper/code/prepare_upload.py": {
+      "sha256": "ed3a56ee4ec3091693c6446e9823a963e5678c7252bce24aa05b65cf01b458aa",
+      "bytes": 7892
+    },
+    "benchmarks/paper/code/run_accuracy.py": {
+      "sha256": "cb33ff2bc4e60a8db421f89ea87e819fc5def133cd4d68f121863bb26f1c5964",
+      "bytes": 6398
+    },
+    "benchmarks/paper/code/run_speed.py": {
+      "sha256": "a7583f7e4d297f4bfcf758e5dd116cd0d7dfa508a7e80f52062b117bd9f283db",
+      "bytes": 17437
+    },
+    "benchmarks/paper/code/single_search.py": {
+      "sha256": "92f43aabdd9e22b0c1d2082437e7ffa046754ff8ae3c8255b7cca3a49717e17a",
+      "bytes": 2908
+    },
+    "benchmarks/paper/code/single_speed_worker.py": {
+      "sha256": "141c1ad03e251f7c3331a2918a29aa5963203120bd39204d8279b44398a7db4b",
+      "bytes": 5241
+    },
+    "benchmarks/paper/code/verify_single_search.py": {
+      "sha256": "8ac1ea6c04e8152ae10af13ecdc3bff0356cb7e9402b9e2edb0c75089d8ed82a",
+      "bytes": 3618
+    },
+    "benchmarks/paper/code/verify_speed_run.py": {
+      "sha256": "b185c33963b193780ad68c41900da381e17494a2636f90baf2e43e7d46287559",
+      "bytes": 10378
+    },
+    "benchmarks/paper/README-single-search.md": {
+      "sha256": "e60fdd7a0daebd9cc083aa676a385e96eae69bbfb6342740b90ea83da5d7f142",
+      "bytes": 8364
+    },
+    "benchmarks/paper/.gitignore": {
+      "sha256": "bafcf68bd52aaf7d9c14069f0e472f8278255d418f7b16b2e5f064452a5f3f7d",
+      "bytes": 186
+    },
+    "benchmarks/paper/results/speed-single-no-warmup-sample-20261116.tsv": {
+      "sha256": "a96be63beb6a2670b4e0af569c098ca738ea1864765c5aae9f0f1021f7e8c584",
+      "bytes": 2066
+    },
+    "benchmarks/paper/results/speed-single-no-warmup-sample-20261116-rounds.tsv": {
+      "sha256": "2abe46b27a7654c144a0e92f04f9d14ebc89f9045d4bfd7789e0c73255da2b56",
+      "bytes": 763
+    },
+    "benchmarks/paper/results/speed-single-no-warmup-sample-20261116-setup.tsv": {
+      "sha256": "486be148e61d9c53e4f7f841415df35882aaaf6b6f0b56b42ed344897483e574",
+      "bytes": 834
+    },
+    "benchmarks/paper/raw/speed-single-no-warmup-sample-20261116.tsv.gz": {
+      "sha256": "8e001198e7a105fe67c7c3ea6dce108d6749e9f4f88aee64ef340bb2f00e20d8",
+      "bytes": 8108
+    },
+    "benchmarks/paper/results/speed-single-no-warmup-full-20261116.tsv": {
+      "sha256": "aad4b3eeb810d4f5d76185f43b2223681564e0d3d215d3efaff3c8f7438b5803",
+      "bytes": 2101
+    },
+    "benchmarks/paper/results/speed-single-no-warmup-full-20261116-rounds.tsv": {
+      "sha256": "8574fff2751a493e48ee70a5fa6957c3a0e429ae6cc62d4399e06c5beaecea81",
+      "bytes": 807
+    },
+    "benchmarks/paper/results/speed-single-no-warmup-full-20261116-setup.tsv": {
+      "sha256": "0433c707c51b20c32b0764c5250e4d5a2fe76f4a25d2c007031be933268e1010",
+      "bytes": 999
+    },
+    "benchmarks/paper/raw/speed-single-no-warmup-full-20261116.tsv.gz": {
+      "sha256": "814a819c2363628581e581b46b0ff3bb31234020533a4b82f19f7469fc2d9223",
+      "bytes": 319474
+    }
+  },
+  "publication_code": {
+    "benchmark_common.py": {
+      "sha256": "bee888e091aeb61209b0b5b3b1d6f7d0515dc9ba1965a0ab46fbd3788c77f390",
+      "search_and_timing_ast_unchanged": true
+    },
+    "build_inputs.py": {
+      "sha256": "61ba425141333a5a97a3c123cf598877ff43f6ad63b486bc594ee0250ef737aa",
+      "search_and_timing_ast_unchanged": true
+    },
+    "method/common.py": {
+      "sha256": "2860ea8ce594c8d89e3b24904487dbb7baa4e885ea3f68bfff731948880cc3c8",
+      "search_and_timing_ast_unchanged": true
+    },
+    "method/engines.py": {
+      "sha256": "da3586eda9f8d0e9e94943157c60f9e0437e760f9845d037e57ddf8caee7cd81",
+      "search_and_timing_ast_unchanged": true
+    },
+    "method/optimized.py": {
+      "sha256": "dadac3cc3f863d994b6088941ef5a781d79366143b2334feaadc114b3b26f4ed",
+      "search_and_timing_ast_unchanged": true
+    },
+    "method/paths.py": {
+      "sha256": "951415d7e7f07eca14ab7432a36f1d30736bf440f5fa6fbb6a779af6e5f92de6",
+      "search_and_timing_ast_unchanged": true
+    },
+    "prepare_assets.py": {
+      "sha256": "9d9fbf53dde916cdfdf831dc60badcb421803e7e0ceba0edbc169b828dd55f63",
+      "search_and_timing_ast_unchanged": true
+    },
+    "prepare_upload.py": {
+      "sha256": "ed3a56ee4ec3091693c6446e9823a963e5678c7252bce24aa05b65cf01b458aa",
+      "search_and_timing_ast_unchanged": true
+    },
+    "run_accuracy.py": {
+      "sha256": "cb33ff2bc4e60a8db421f89ea87e819fc5def133cd4d68f121863bb26f1c5964",
+      "search_and_timing_ast_unchanged": true
+    },
+    "run_speed.py": {
+      "sha256": "a7583f7e4d297f4bfcf758e5dd116cd0d7dfa508a7e80f52062b117bd9f283db",
+      "search_and_timing_ast_unchanged": true
+    },
+    "single_search.py": {
+      "sha256": "92f43aabdd9e22b0c1d2082437e7ffa046754ff8ae3c8255b7cca3a49717e17a",
+      "search_and_timing_ast_unchanged": true
+    },
+    "single_speed_worker.py": {
+      "sha256": "141c1ad03e251f7c3331a2918a29aa5963203120bd39204d8279b44398a7db4b",
+      "search_and_timing_ast_unchanged": true
+    },
+    "verify_single_search.py": {
+      "sha256": "8ac1ea6c04e8152ae10af13ecdc3bff0356cb7e9402b9e2edb0c75089d8ed82a",
+      "search_and_timing_ast_unchanged": true
+    },
+    "verify_speed_run.py": {
+      "sha256": "b185c33963b193780ad68c41900da381e17494a2636f90baf2e43e7d46287559",
+      "search_and_timing_ast_unchanged": true
+    }
+  },
+  "post_measurement_changes": [
+    "Removed comments and docstrings",
+    "The estimate reads the published no-warmup table",
+    "Text files use LF line endings"
+  ],
+  "publication_validation": {
+    "status": "passed",
+    "source_downloads": {
+      "UKBB-EFO": {
+        "url": "https://raw.githubusercontent.com/rsgoncalves/text2term-evaluation/b999dbb670fa13c9ceb1ba631a7abc7557f3293b/data/UK_Biobank_master_file.tsv",
+        "source_sha256": "6a111561366f01c5b5ed8bc81b958341896393febb9edbe5b9c195f1dcf1bed6",
+        "download": "downloaded_and_verified",
+        "original_rows": 1565,
+        "excluded": {
+          "mapping_contains_comma": 36,
+          "mapping_contains_double_pipe": 11,
+          "mapping_type_not_exact": 619
+        },
+        "selected_rows": 899,
+        "distinct_strings": 894,
+        "unresolved_reference_ids": 1
+      },
+      "Biomappings": {
+        "url": "https://raw.githubusercontent.com/rsgoncalves/text2term-evaluation/b999dbb670fa13c9ceb1ba631a7abc7557f3293b/data/biomappings.tsv",
+        "source_sha256": "8eca8ddcd235197ac20eff43c6775ab7c9bf486d020603b734e76c396c2890e0",
+        "download": "downloaded_and_verified",
+        "original_rows": 10431,
+        "excluded": {
+          "target_not_efo": 9634,
+          "relation_not_exact_match": 1
+        },
+        "selected_rows": 796,
+        "distinct_strings": 795,
+        "unresolved_reference_ids": 0
+      },
+      "OLS-EFO": {
+        "url": "https://raw.githubusercontent.com/rsgoncalves/text2term-evaluation/b999dbb670fa13c9ceb1ba631a7abc7557f3293b/data/efo.ols.sssom.tsv",
+        "source_sha256": "a5be5b487c0003713cda5c704a4d8a321229eafbb42c7966cffd004d4049c643",
+        "download": "downloaded_and_verified",
+        "original_rows": 35028,
+        "excluded": {
+          "missing_object_label": 25030
+        },
+        "selected_rows": 9998,
+        "distinct_strings": 7377,
+        "unresolved_reference_ids": 0
+      }
+    },
+    "input_hashes_match_original": true,
+    "input_preparation_versions": {
+      "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+      "pandas": "2.3.3",
+      "bioregistry": "0.13.31"
+    },
+    "asset_preparation_packages": {
+      "text2term": "4.5.0",
+      "scikit-learn": "1.8.0",
+      "numpy": "2.3.5",
+      "scipy": "1.18.0",
+      "ormsgpack": "1.12.2"
+    },
+    "target_terms": 29374,
+    "alias_rows": 112511,
+    "full_plan_rows": [
+      899,
+      796,
+      9998
+    ],
+    "sample_plan_rows": [
+      100,
+      100,
+      100
+    ],
+    "short_check": {
+      "status": "passed",
+      "started_at_utc": "2026-11-16T22:31:21.138907+00:00",
+      "finished_at_utc": "2026-11-16T22:31:45.953537+00:00",
+      "measured_requests": 36,
+      "completed_groups": 12,
+      "fresh_search_processes": 12,
+      "warmup_searches": 0,
+      "first_search_included_in_total": true,
+      "raw_totals_and_means_match_summary": true,
+      "code_inputs_and_assets_unchanged": true,
+      "E12_rows_checked": 18,
+      "E12_distinct_inputs_checked": 18,
+      "text2term_official_single_API_checks": 9,
+      "candidate_order_and_score_mismatches": 0,
+      "rtol": 1e-12,
+      "atol": 1e-12,
+      "discarded_attempt_requests": 0,
+      "failed_or_ineligible_attempt_requests": 0,
+      "note": "Validation ran after all timing in a separate process. This is not an accuracy evaluation."
+    },
+    "short_check_is_paper_timing": false,
+    "full_benchmark_remeasured_for_publication": false,
+    "initial_download_attempt": "Blocked by restricted network. Repeated successfully with network access.",
+    "dependency_installation_tested_in_fresh_environment": false
+  }
+}

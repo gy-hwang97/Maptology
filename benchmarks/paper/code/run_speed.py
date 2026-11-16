@@ -1,345 +1,345 @@
-"""Measure E12 and text2term on fixed N=100 and whole-dataset inputs."""
-
 import argparse
-import gc
+import csv
 import importlib.metadata
 import json
+import math
 import os
+import platform
 import statistics
+import subprocess
 import sys
-import time
+from datetime import datetime, timezone
+from pathlib import Path
 
-import numpy as np
+import psutil
 
 import benchmark_common as common
 
 
-sys.path.insert(0, str(common.CODE_DIR / "method"))
-import engines
-from optimized import OptimizedE12
+METHODS = ("E12", "T")
+FIELDS = ("dataset", "workload", "method_id", "repeat", "request_index", "row_id",
+          "input_key", "input_rows_per_round", "group_id", "process_id", "first_search",
+          "power_before", "power_after", "eligible", "status", "seconds", "candidates", "error")
 
 
-CONDITIONS = ("batch32_dedup", "batch32", "T")
-RAW_COLUMNS = (
-    "dataset", "workload", "method_id", "repeat", "warmup", "input_rows",
-    "power_before", "power_after", "eligible", "status", "seconds",
-    "rank_mismatches", "score_mismatches", "error",
-)
-SUMMARY_COLUMNS = (
-    "dataset", "workload", "method_id", "method_name", "input_rows",
-    "distinct_inputs", "primary_comparison", "repetitions", "successes",
-    "failures", "median_seconds", "mean_seconds", "sample_sd_seconds",
-    "min_seconds", "max_seconds", "rank_mismatches", "score_mismatches",
-)
+def power_state():
+    battery = psutil.sensors_battery()
+    if battery is None:
+        return "no_battery_reported"
+    if battery.power_plugged:
+        return "mains"
+    return "battery"
 
 
-def make_workloads(dataset, sample):
-    rows = common.input_rows(dataset)
-    selected = common.read_tsv(common.INPUT_DIR / ("speed-sample-" + dataset + ".tsv"))
-
-    ids = []
-    texts = []
-    for position, row in enumerate(selected):
-        if sample and position >= 10:
-            break
-        ids.append("n" + str(position))
-        texts.append(row["input_key"])
-    first_name = "N=100 sample"
-    if sample:
-        first_name = "Code check: N=10"
-
-    full_ids = []
-    full_texts = []
-    for position, row in enumerate(rows):
-        if sample and position >= 50:
-            break
-        full_ids.append(row["evaluation_row_id"])
-        full_texts.append(row["input_key"])
-    second_name = "All evaluation rows"
-    if sample:
-        second_name = "Code check: first 50 rows"
-
-    return [(first_name, ids, texts), (second_name, full_ids, full_texts)]
-
-
-def signatures(method, output):
-    signatures = []
-    if method == "T":
-        for item in output:
-            pairs = []
-            for iri, score in zip(item[1], item[2]):
-                pairs.append((iri, float(score)))
-            signatures.append(pairs)
-    else:
-        for candidates, _ in output:
-            pairs = []
-            for candidate in candidates:
-                iri = candidate["Ontology Term URI"]
-                score = float(candidate["Mapping Score"])
-                pairs.append((iri, score))
-            signatures.append(pairs)
-    return signatures
-
-
-def expected_signatures(texts, reference):
-    expected = []
-    for text in texts:
-        rows, _ = reference[str(text).strip()]
-        pairs = []
-        for row in rows:
-            pairs.append((row["Ontology Term URI"], float(row["Mapping Score"])))
-        expected.append(pairs)
-    return expected
-
-
-def compare(actual, expected):
-    rank_mismatches = 0
-    score_mismatches = 0
-    if len(actual) != len(expected):
-        return 1, 1
-    for ours, theirs in zip(actual, expected):
-        if len(ours) != len(theirs):
-            rank_mismatches += 1
-            score_mismatches += 1
-            continue
-        rank_wrong = False
-        score_wrong = False
-        for first, second in zip(ours, theirs):
-            if first[0] != second[0]:
-                rank_wrong = True
-                score_wrong = True
-            elif not np.isclose(first[1], second[1], rtol=1e-12, atol=1e-12):
-                score_wrong = True
-        if rank_wrong:
-            rank_mismatches += 1
-        if score_wrong:
-            score_mismatches += 1
-    return rank_mismatches, score_mismatches
-
-
-def run_call(method, ids, texts, searcher):
-    if method == "T":
-        frame = engines.t2t_map(texts, ids)
-        return engines.t2t_relink(frame, ids, texts)
-    dedup = method == "batch32_dedup"
-    output, _ = searcher.many(texts, batch_size=32, dedup=dedup)
-    return output
-
-
-def measure(dataset, workload, method, repeat, ids, texts, searcher, reference, first_t, folder, rows):
-    gc.collect()
-    before = common.power_state()
-    record = {
-        "dataset": dataset,
-        "workload": workload,
-        "method_id": method,
-        "repeat": repeat,
-        "warmup": repeat == 0,
-        "input_rows": len(texts),
-        "power_before": before,
-        "power_after": "",
-        "eligible": False,
-        "status": "not_run",
-        "seconds": "",
-        "rank_mismatches": 0,
-        "score_mismatches": 0,
-        "error": "",
-    }
-
-    output = None
-    if before != "mains":
-        record["status"] = "power_ineligible"
-    else:
-        start = time.perf_counter()
-        try:
-            output = run_call(method, ids, texts, searcher)
-            record["seconds"] = time.perf_counter() - start
-            record["status"] = "ok"
-        except Exception as failure:
-            record["status"] = "error"
-            record["error"] = repr(failure).replace("\t", " ").replace("\n", " ")
-
-    after = common.power_state()
-    record["power_after"] = after
-    record["eligible"] = before == "mains" and after == "mains"
-    if output is not None:
-        actual = signatures(method, output)
-        if method == "T":
-            key = (dataset, workload)
-            if key not in first_t:
-                first_t[key] = actual
-            wanted = first_t[key]
-            for item in output:
-                if item[3] == "conflicting_outputs":
-                    record["status"] = "output_conflict"
-        else:
-            wanted = expected_signatures(texts, reference)
-        rank, score = compare(actual, wanted)
-        record["rank_mismatches"] = rank
-        record["score_mismatches"] = score
-        if rank or score:
-            record["status"] = "output_mismatch"
-
-    rows.append(record)
-    common.write_tsv(folder / "speed-timings.tsv", RAW_COLUMNS, rows)
-    print(dataset, workload, method, "repeat", repeat, record["status"], record["seconds"], flush=True)
-    if not record["eligible"] or record["status"] != "ok":
-        raise RuntimeError("The timing stopped; see speed-timings.tsv")
-    return record
-
-
-def summarize(rows, plans):
-    output = []
+def plans(workloads, sample):
+    result = []
     for dataset in common.DATASETS:
-        for workload in ("N=100 sample", "All evaluation rows"):
-            for method in CONDITIONS:
-                attempts = []
-                values = []
-                errors = 0
-                rank = 0
-                score = 0
-                for row in rows:
-                    if row["dataset"] != dataset or row["workload"] != workload:
-                        continue
-                    if row["method_id"] != method or row["warmup"]:
-                        continue
-                    attempts.append(row)
-                    if row["status"] == "ok" and row["eligible"]:
-                        values.append(float(row["seconds"]))
-                        rank += row["rank_mismatches"]
-                        score += row["score_mismatches"]
-                    else:
-                        errors += 1
-                if not attempts:
-                    continue
-                name = common.NAMES["T"]
-                primary = "yes"
-                if method != "T":
-                    name = common.NAMES["E12"]
-                    if method == "batch32":
-                        primary = "no"
-                first = attempts[0]
-                distinct = 0
-                for plan_name, _, plan_texts in plans[dataset]:
-                    if plan_name == workload:
-                        cleaned = set()
-                        for text in plan_texts:
-                            cleaned.add(str(text).strip())
-                        distinct = len(cleaned)
-                summary = {
-                    "dataset": dataset,
-                    "workload": workload,
-                    "method_id": method,
-                    "method_name": name,
-                    "input_rows": first["input_rows"],
-                    "distinct_inputs": distinct,
-                    "primary_comparison": primary,
-                    "repetitions": len(attempts),
-                    "successes": len(values),
-                    "failures": errors,
-                    "median_seconds": "",
-                    "mean_seconds": "",
-                    "sample_sd_seconds": "",
-                    "min_seconds": "",
-                    "max_seconds": "",
-                    "rank_mismatches": rank,
-                    "score_mismatches": score,
-                }
-                if values:
-                    summary["median_seconds"] = statistics.median(values)
-                    summary["mean_seconds"] = statistics.mean(values)
-                    summary["min_seconds"] = min(values)
-                    summary["max_seconds"] = max(values)
-                if len(values) > 1:
-                    summary["sample_sd_seconds"] = statistics.stdev(values)
-                output.append(summary)
-    return output
+        choices = []
+        if workloads in ("sample", "all"):
+            choices.append(("N=100 sample", common.INPUT_DIR / ("speed-sample-" + dataset + ".tsv")))
+        if workloads in ("full", "all"):
+            choices.append(("All evaluation rows", common.INPUT_DIR / ("eval-" + dataset + ".tsv")))
+        for workload, path in choices:
+            if sample:
+                workload = "Code check: " + workload
+            items = []
+            for position, row in enumerate(common.read_tsv(path), start=1):
+                if sample and position > 3:
+                    break
+                text = row["input_key"]
+                if not text:
+                    raise RuntimeError("The fixed input contains an empty search string")
+                row_id = row.get("evaluation_row_id", dataset + "-sample-" + str(position))
+                items.append({"row_id": row_id, "input_key": text})
+            result.append((dataset, workload, items))
+    return result
+
+
+def append_row(path, fields, row):
+    exists = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n")
+        if not exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def write_rows(path, fields, rows):
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def selected_rows(folder, group):
+    if not group["attempts"]:
+        return []
+    path = folder / group["attempts"][-1] / "speed-timings.tsv"
+    if not path.exists():
+        return []
+    return common.read_tsv(path)
+
+
+def summarize(folder, status):
+    raw = []
+    rounds = []
+    setup = []
+    combined = {}
+    for group in status["groups"]:
+        selected = ""
+        if group["attempts"]:
+            selected = group["attempts"][-1]
+        failures = 0
+        discarded = 0
+        for attempt in group["attempts"]:
+            path = folder / attempt / "speed-timings.tsv"
+            if path.exists():
+                for row in common.read_tsv(path):
+                    row["attempt"] = attempt
+                    row["selected_attempt"] = str(attempt == selected)
+                    raw.append(row)
+                    if row["status"] != "ok" or row["eligible"] != "True":
+                        failures += 1
+                    if attempt != selected:
+                        discarded += 1
+            metadata = folder / attempt / "status.json"
+            if metadata.exists():
+                record = json.loads(metadata.read_text(encoding="utf-8"))
+                setup.append({"group_id": group["group_id"], "dataset": group["dataset"],
+                              "workload": group["workload"], "method_id": group["method_id"],
+                              "repeat": group["repeat"], "attempt": attempt,
+                              "selected_attempt": str(attempt == selected), "status": record["status"],
+                              "process_id": record["process_id"], "prepare_seconds": record.get("prepare_seconds", ""),
+                              "power_before": record.get("prepare_power_before", ""),
+                              "power_after": record.get("prepare_power_after", "")})
+        values = []
+        later = []
+        first = ""
+        indices = set()
+        for row in selected_rows(folder, group):
+            if row["status"] == "ok" and row["eligible"] == "True":
+                index = int(row["request_index"])
+                if index in indices:
+                    raise RuntimeError("Duplicate request in " + group["group_id"])
+                indices.add(index)
+                seconds = float(row["seconds"])
+                values.append(seconds)
+                if index == 1:
+                    first = seconds
+                else:
+                    later.append(seconds)
+        complete = group["status"] == "measured" and len(values) == len(group["items"])
+        total = ""
+        if complete:
+            total = math.fsum(values)
+        rounds.append({"dataset": group["dataset"], "workload": group["workload"],
+                       "method_id": group["method_id"], "repeat": group["repeat"],
+                       "group_id": group["group_id"], "input_rows": len(group["items"]),
+                       "successful_requests": len(values), "complete": complete,
+                       "total_search_seconds": total, "first_search_seconds": first,
+                       "attempts": len(group["attempts"]), "discarded_attempt_requests": discarded,
+                       "failed_or_ineligible_requests": failures})
+        key = (group["dataset"], group["workload"], group["method_id"])
+        if key not in combined:
+            distinct = set()
+            for item in group["items"]:
+                distinct.add(item["input_key"])
+            combined[key] = {"totals": [], "values": [], "later": [], "first": [],
+                             "input_rows": len(group["items"]), "distinct_inputs": len(distinct),
+                             "failures": 0, "discarded": 0}
+        data = combined[key]
+        data["values"].extend(values)
+        data["later"].extend(later)
+        data["failures"] += failures
+        data["discarded"] += discarded
+        if first != "":
+            data["first"].append(first)
+        if complete:
+            data["totals"].append(total)
+    summaries = []
+    for key, data in combined.items():
+        entry = {"dataset": key[0], "workload": key[1], "method_id": key[2],
+                 "method_name": "Maptology E12", "input_rows": data["input_rows"],
+                 "distinct_inputs": data["distinct_inputs"], "planned_repeats": status["settings"]["repeats"],
+                 "complete_repeats": len(data["totals"]), "successful_requests": len(data["values"]),
+                 "failed_or_ineligible_requests": data["failures"],
+                 "discarded_attempt_requests": data["discarded"],
+                 "median_total_seconds": "", "mean_total_seconds": "", "sample_sd_total_seconds": "",
+                 "min_total_seconds": "", "max_total_seconds": "",
+                 "median_request_seconds": "", "mean_request_seconds": "",
+                 "median_first_search_seconds": "", "mean_first_search_seconds": "",
+                 "median_later_request_seconds": "", "mean_later_request_seconds": ""}
+        if key[2] == "T":
+            entry["method_name"] = "text2term TF-IDF with preloaded terms and mapper"
+        for source, middle in (("totals", "total"), ("values", "request"),
+                               ("first", "first_search"), ("later", "later_request")):
+            values = data[source]
+            if values:
+                entry["median_" + middle + "_seconds"] = statistics.median(values)
+                entry["mean_" + middle + "_seconds"] = statistics.mean(values)
+        if data["totals"]:
+            entry["min_total_seconds"] = min(data["totals"])
+            entry["max_total_seconds"] = max(data["totals"])
+        if len(data["totals"]) > 1:
+            entry["sample_sd_total_seconds"] = statistics.stdev(data["totals"])
+        summaries.append(entry)
+    write_rows(folder / "speed-timings.tsv", FIELDS + ("attempt", "selected_attempt"), raw)
+    write_rows(folder / "speed-rounds.tsv", rounds[0].keys(), rounds)
+    write_rows(folder / "speed-results.tsv", summaries[0].keys(), summaries)
+    if setup:
+        write_rows(folder / "setup-times.tsv", setup[0].keys(), setup)
+    return summaries
+
+
+def make_groups(schedule, repeats):
+    groups = []
+    for repeat in range(1, repeats + 1):
+        for index, (dataset, workload, items) in enumerate(schedule):
+            order = METHODS
+            if (repeat + index) % 2 == 0:
+                order = ("T", "E12")
+            for method in order:
+                groups.append({"group_id": "group-" + str(len(groups) + 1).zfill(3),
+                               "dataset": dataset, "workload": workload, "method_id": method,
+                               "repeat": repeat, "items": items, "attempts": [], "status": "pending"})
+    return groups
+
+
+def estimate(schedule, repeats):
+    path = common.PACKAGE_DIR / "results" / "speed-single-no-warmup-full-20261116.tsv"
+    rates = {}
+    if path.exists():
+        for row in common.read_tsv(path):
+            rates[(row["dataset"], row["method_id"])] = float(row["mean_request_seconds"])
+    seconds = 0.0
+    requests = 0
+    for dataset, workload, items in schedule:
+        for method in METHODS:
+            requests += len(items) * repeats
+            if (dataset, method) not in rates:
+                return {"seconds": None, "source": "No previous timing table is available"}
+            seconds += len(items) * repeats * rates[(dataset, method)]
+    return {"seconds": seconds, "measured_requests": requests,
+            "source": "Recorded no-warmup timings on the reference laptop; no searches run for this estimate"}
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sample", action="store_true", help="Code check only; not paper data")
-    parser.add_argument("--repeats", type=int, default=5)
+    parser = argparse.ArgumentParser(description="Time single-string searches without warmups")
+    parser.add_argument("--workloads", choices=("sample", "full", "all"), default="sample")
+    parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--warmup-queries", type=int, choices=(0,), default=0)
+    parser.add_argument("--sample", action="store_true", help="Code check only: three strings per dataset")
+    parser.add_argument("--estimate", "--pilot-only", action="store_true", dest="estimate")
+    parser.add_argument("--resume", type=Path)
     args = parser.parse_args()
-
+    if args.repeats < 1:
+        raise RuntimeError("Repeats must be positive")
+    schedule = plans(args.workloads, args.sample)
+    prediction = estimate(schedule, args.repeats)
+    print("Estimate:", json.dumps(prediction), flush=True)
+    if args.estimate:
+        return
     if os.environ.get("PYTHONHASHSEED") != "0":
         raise RuntimeError("Set PYTHONHASHSEED=0 before starting Python")
-    if common.power_state() != "mains":
-        raise RuntimeError("Connect AC power before measuring speed")
-    common.check_assets(include_all_indexes=False)
-
-    reference_path = common.ASSET_DIR
-    reference_path = os.path.join(reference_path, "e12-optimization-test-20261024", "data")
-    reference_path = os.path.join(reference_path, "verify-20261024T070858252278Z", "reference-predictions.json")
-    with open(reference_path, "r", encoding="utf-8") as handle:
-        reference = json.load(handle)
-
-    state, lookup = engines.load_for("E12")
-    searcher = OptimizedE12(state, lookup, "EFO-3.62.0-common-29374")
-    import text2term
-
-    label = "speed"
-    if args.sample:
-        label = "speed-sample"
-    folder = common.new_run(label)
-    status = {
-        "status": "running",
-        "power_at_start": common.power_state(),
-        "python": sys.version,
-        "text2term": importlib.metadata.version("text2term"),
-        "sample": args.sample,
-        "repeats": args.repeats,
-        "input_hashes": common.input_hashes(),
-        "code_hashes": common.code_hashes(),
-        "assets_folder": common.ASSET_DIR,
-        "timer": "One call; imports, input loading, index loading, output checks and gc.collect are outside.",
-    }
+    if power_state() == "battery":
+        raise RuntimeError("Connect the laptop power adapter before measuring")
+    with (common.PACKAGE_DIR / "records" / "environment-20261102.json").open(encoding="utf-8") as handle:
+        expected_inputs = json.load(handle)["input_hashes"]
+    if common.input_hashes() != expected_inputs:
+        raise RuntimeError("Run build_inputs.py to recreate the fixed benchmark inputs")
+    assets = common.check_assets(False)
+    asset_manifest = assets / "asset-manifest.json"
+    if not asset_manifest.exists():
+        asset_manifest = common.PACKAGE_DIR / "records" / "required-assets.tsv"
+    settings = {"protocol": "single-no-warmup-v1", "workloads": args.workloads,
+                "repeats": args.repeats, "sample": args.sample, "warmup_queries": 0,
+                "input_hashes": common.input_hashes(), "code_hashes": common.code_hashes(),
+                "asset_manifest_sha256": common.sha256(asset_manifest)}
+    if args.resume:
+        folder = args.resume.resolve()
+        status = json.loads((folder / "status.json").read_text(encoding="utf-8"))
+        if status["settings"] != settings:
+            raise RuntimeError("Resume settings, inputs, assets or code differ from this run")
+        if status["status"] == "complete":
+            print("Already complete:", folder)
+            return
+    else:
+        folder = common.new_run("speed-single-cold")
+        packages = {}
+        for name in ("text2term", "numpy", "scipy", "scikit-learn", "pandas", "psutil", "sparse-dot-topn"):
+            packages[name] = importlib.metadata.version(name)
+        status = {"settings": settings, "status": "starting", "python": sys.version,
+                  "platform": platform.platform(), "processor": platform.processor(), "packages": packages,
+                  "logical_cpus": os.cpu_count(), "physical_cpus": psutil.cpu_count(logical=False),
+                  "power_at_start": power_state(), "search_target": "EFO 3.62.0, 29,374 common terms",
+                  "max_mappings": 5, "text2term_min_score": 0.0, "deduplicate_requests": False,
+                  "process_policy": "New process for each method, dataset, workload and repeat; retained across its requests",
+                  "cold_start_definition": "First search after loading existing assets in a new process; no earlier search in that process",
+                  "timer_includes": "One search and candidate generation, including any lazy first-search initialization",
+                  "timer_excludes": "Imports, input loading, index and ontology loading, mapper construction, matrix preparation, output serialization and validation",
+                  "text2term_call": "TFIDFMapper.map on one input; TF-IDF fitting remains inside each call",
+                  "maptology_call": "OptimizedE12.single on one input; no saved query results",
+                  "os_file_cache_cleared": False, "hard_per_query_timeout_seconds": None,
+                  "estimate": prediction, "groups": make_groups(schedule, args.repeats)}
+    print("Run:", folder, flush=True)
     common.write_json(folder / "status.json", status)
-
-    rows = []
-    first_t = {}
     try:
-        plans = {}
-        for dataset in common.DATASETS:
-            plans[dataset] = make_workloads(dataset, args.sample)
-
-        pilot = {}
-        pilot_workload, pilot_ids, pilot_texts = plans["OLS-EFO"][0]
-        for method in CONDITIONS:
-            record = measure("OLS-EFO", "Pilot", method, 0, pilot_ids, pilot_texts,
-                             searcher, reference, first_t, folder, rows)
-            pilot[method] = float(record["seconds"])
-
-        estimate = 0.0
-        for dataset in common.DATASETS:
-            for _, _, texts in plans[dataset]:
-                ratio = len(texts) / len(pilot_texts)
-                estimate += (args.repeats + 1) * (pilot["T"] + ratio * (pilot["batch32"] + pilot["batch32_dedup"]))
-        print("Estimated remaining minutes:", round(estimate / 60, 1), flush=True)
-
-        for dataset in common.DATASETS:
-            for workload, ids, texts in plans[dataset]:
-                for repeat in range(args.repeats + 1):
-                    shift = repeat % len(CONDITIONS)
-                    order = CONDITIONS[shift:] + CONDITIONS[:shift]
-                    for method in order:
-                        measure(dataset, workload, method, repeat, ids, texts,
-                                searcher, reference, first_t, folder, rows)
+        for group in status["groups"]:
+            if group["status"] == "measured":
+                continue
+            if power_state() == "battery":
+                raise RuntimeError("Connect the laptop power adapter")
+            attempt = "groups/" + group["group_id"] + "/attempt-" + str(len(group["attempts"]) + 1).zfill(3)
+            destination = folder / attempt
+            destination.mkdir(parents=True)
+            group["attempts"].append(attempt)
+            group["status"] = "running"
+            status["status"] = "measuring"
+            status["active_group"] = group["group_id"]
+            common.write_json(destination / "job.json", group)
+            common.write_json(folder / "status.json", status)
+            command = [sys.executable, "-B", str(common.CODE_DIR / "single_speed_worker.py"),
+                       "--job", str(destination / "job.json")]
+            print("Timing:", group["dataset"], group["method_id"], "round", group["repeat"],
+                  "requests", len(group["items"]), flush=True)
+            with (destination / "stdout.log").open("w", encoding="utf-8") as stdout:
+                with (destination / "stderr.log").open("w", encoding="utf-8") as stderr:
+                    result = subprocess.run(command, stdout=stdout, stderr=stderr)
+            worker_status = destination / "status.json"
+            if result.returncode != 0 or not worker_status.exists():
+                group["status"] = "failed"
+                raise RuntimeError("Search process failed; see " + str(destination))
+            worker = json.loads(worker_status.read_text(encoding="utf-8"))
+            if worker["status"] != "complete" or worker["successful_requests"] != len(group["items"]):
+                group["status"] = "failed"
+                raise RuntimeError("Incomplete search group: " + group["group_id"])
+            group["status"] = "measured"
+            common.write_json(folder / "status.json", status)
+            summarize(folder, status)
+        status["status"] = "validating"
+        common.write_json(folder / "status.json", status)
+        command = [sys.executable, "-B", str(common.CODE_DIR / "verify_speed_run.py"), "--run-folder", str(folder)]
+        with (folder / "verification-stdout.log").open("w", encoding="utf-8") as stdout:
+            with (folder / "verification-stderr.log").open("w", encoding="utf-8") as stderr:
+                result = subprocess.run(command, stdout=stdout, stderr=stderr)
+        if result.returncode != 0:
+            raise RuntimeError("Post-measurement verification failed; see verification logs")
+        verification = json.loads((folder / "verification.json").read_text(encoding="utf-8"))
+        if verification["status"] != "passed":
+            raise RuntimeError("Post-measurement verification did not pass")
         status["status"] = "complete"
-    except Exception as failure:
+        status.pop("error", None)
+    except BaseException as error:
         status["status"] = "stopped"
-        status["error"] = repr(failure)
+        status["error"] = type(error).__name__ + ": " + str(error)
         raise
     finally:
-        if not args.sample:
-            summaries = summarize(rows, plans)
-            common.write_tsv(folder / "speed-results.tsv", SUMMARY_COLUMNS, summaries)
-        status["power_at_end"] = common.power_state()
-        status["timing_rows"] = len(rows)
+        status["power_at_end"] = power_state()
+        status["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
         common.write_json(folder / "status.json", status)
+        summarize(folder, status)
         print("Output:", folder, flush=True)
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

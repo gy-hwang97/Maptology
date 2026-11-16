@@ -1,0 +1,7 @@
+dataset	workload	method_id	repeat	group_id	input_rows	successful_requests	complete	total_search_seconds	first_search_seconds	attempts	discarded_attempt_requests	failed_or_ineligible_requests
+UKBB-EFO	N=100 sample	E12	1	group-001	100	100	True	0.3743354000034742	0.004728100000647828	1	0	0
+UKBB-EFO	N=100 sample	T	1	group-002	100	100	True	289.3781641999958	3.6847812999913003	1	0	0
+Biomappings	N=100 sample	T	1	group-003	100	100	True	303.27173450015835	3.9216312000062317	1	0	0
+Biomappings	N=100 sample	E12	1	group-004	100	100	True	0.4356905998720322	0.005214199976762757	1	0	0
+OLS-EFO	N=100 sample	E12	1	group-005	100	100	True	0.43052980001084507	0.003708900010678917	1	0	0
+OLS-EFO	N=100 sample	T	1	group-006	100	100	True	392.3592408999102	4.868884099996649	1	0	0
