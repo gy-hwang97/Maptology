@@ -30,8 +30,9 @@ def verify(folder, api_queries):
     require(settings["input_hashes"] == common.input_hashes(), "Inputs changed during measurement")
     assets = common.check_assets(False)
     manifest = assets / "asset-manifest.json"
-    if not manifest.exists():
+    if not manifest.is_file():
         manifest = common.PACKAGE_DIR / "records" / "required-assets.tsv"
+    require(manifest.is_file(), "The asset manifest is missing")
     require(common.sha256(manifest) == settings["asset_manifest_sha256"], "Asset manifest changed")
     require(os.environ.get("PYTHONHASHSEED") == "0", "PYTHONHASHSEED must be 0")
     expected = {}

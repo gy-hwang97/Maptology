@@ -1,0 +1,7 @@
+raw/
+results/
+runs/
+records/
+inputs/*.tsv
+sources/
+assets/

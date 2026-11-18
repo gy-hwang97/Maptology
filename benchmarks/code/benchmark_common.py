@@ -18,6 +18,7 @@ INPUT_DIR = PACKAGE_DIR / "inputs"
 RUN_DIR = PACKAGE_DIR / "runs"
 ASSET_DIR = os.environ.get("MAPTOLOGY_BENCHMARK_ASSETS", str(PACKAGE_DIR / "assets"))
 DATASETS = ("UKBB-EFO", "Biomappings", "OLS-EFO")
+SPEED_SAMPLE_SIZE = 500
 METHODS = ("A", "B2", "E1", "E2", "E12", "T")
 NAMES = {
     "A": "Original Maptology",
@@ -100,7 +101,10 @@ def check_assets(include_all_indexes):
                 raise RuntimeError("Benchmark asset changed: " + name)
         return folder
 
-    records = read_tsv(PACKAGE_DIR / "records" / "required-assets.tsv")
+    records_path = PACKAGE_DIR / "records" / "required-assets.tsv"
+    if not records_path.is_file():
+        raise RuntimeError("Assets are not prepared")
+    records = read_tsv(records_path)
     for record in records:
         if not record["needed_for"].startswith("run"):
             continue

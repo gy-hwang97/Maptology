@@ -1,0 +1,30 @@
+# Pinned to the recorded single-search environment where possible
+# (records/speed-single-no-warmup-20261116.json and input-download-verification).
+#
+# text2term 4.5.0 declares older dependency ranges (e.g. numpy~=1.26) that
+# conflict with the recorded pins below. The Dockerfile therefore:
+#   1) pip install -r requirements-docker.txt
+#   2) pip install --no-deps text2term==4.5.0
+# Keep the text2term line commented so a plain `pip install -r` does not
+# downgrade numpy/scipy/scikit-learn.
+
+numpy==2.3.5
+scipy==1.18.0
+scikit-learn==1.8.0
+pandas==2.3.3
+psutil==7.2.2
+sparse-dot-topn==1.2.0
+ormsgpack>=1.5.0
+bioregistry==0.13.31
+owlready2>=0.47
+rdflib>=7.0.0
+requests>=2.32.3
+tqdm>=4.67.1
+nltk>=3.9.1
+rapidfuzz>=3.12.2
+shortuuid>=1.0.11
+gensim>=4.3.2
+setuptools>=80.8.0
+
+# Installed separately with --no-deps (see Dockerfile):
+# text2term==4.5.0

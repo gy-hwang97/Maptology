@@ -1,0 +1,42 @@
+# Used as: docker build --ignorefile benchmarks/.dockerignore ...
+# Context is the repository root.
+
+.git
+.venv
+venv
+venv312
+env
+__pycache__
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+.env
+.DS_Store
+.vscode
+.devcontainer
+*.bak
+*.bak/
+
+# App runtime caches (not needed for paper benchmarks)
+ontology_cache*
+tfidf_cache*
+text2term
+src
+tests
+docker-run.sh
+docker-run.bat
+docker-entrypoint.sh
+Dockerfile
+requirements.txt
+maptology.png
+
+# Heavy / regenerable benchmark data (mounted at run time instead)
+benchmarks/runs
+benchmarks/sources
+benchmarks/assets
+benchmarks/inputs
+benchmarks/raw/*.tsv.gz

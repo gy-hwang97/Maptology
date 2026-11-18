@@ -62,11 +62,12 @@ def search_text2term(rows):
 
 
 def old_counts():
-    saved = common.read_tsv(common.PACKAGE_DIR / "results" / "accuracy-results.tsv")
+    path = common.PACKAGE_DIR / "results" / "accuracy-results.tsv"
+    if not path.is_file():
+        return {}
     found = {}
-    for row in saved:
-        key = (row["dataset"], row["method_id"])
-        found[key] = row
+    for row in common.read_tsv(path):
+        found[(row["dataset"], row["method_id"])] = row
     return found
 
 
@@ -139,10 +140,13 @@ def score_dataset(dataset, rows, raw_rows, summary_rows, old, scope):
             "errors": errors,
         }
         summary_rows.append(summary)
-        previous = old[(dataset, method)]
-        old1 = int(previous["top1_hits"])
-        old5 = int(previous["top5_hits"])
-        print(method, "Top-1", top1, "old", old1, "Top-5", top5, "old", old5, flush=True)
+        previous = old.get((dataset, method))
+        if previous is None:
+            print(method, "Top-1", top1, "Top-5", top5, flush=True)
+        else:
+            old1 = int(previous["top1_hits"])
+            old5 = int(previous["top5_hits"])
+            print(method, "Top-1", top1, "old", old1, "Top-5", top5, "old", old5, flush=True)
 
 
 def main():

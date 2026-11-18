@@ -20,3 +20,4 @@ text2term
 .devcontainer
 *.bak
 *.bak/
+benchmarks

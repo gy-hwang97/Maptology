@@ -18,7 +18,7 @@ from build_inputs import download, sha256
 
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT.parent.parent / "build"))
+sys.path.insert(0, str(ROOT.parent / "build"))
 import build_all_caches
 
 URL = "https://github.com/EBISPOT/efo/releases/download/v3.62.0/efo.owl"

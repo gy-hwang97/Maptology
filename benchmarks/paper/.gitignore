@@ -1,9 +1,0 @@
-runs/
-records/protected-files-before.json
-records/verification-report.tsv
-records/file-provenance.tsv
-inputs/*.tsv
-raw/accuracy-per-row-ranks*.tsv
-raw/speed-timings.tsv
-sources/
-assets/

@@ -5,6 +5,7 @@ import json
 import math
 import os
 import platform
+import random
 import statistics
 import subprocess
 import sys
@@ -31,27 +32,48 @@ def power_state():
     return "battery"
 
 
+def workload_size(workloads):
+    if workloads == "full":
+        return None
+    text = str(workloads)
+    if text.isdigit() and str(int(text)) == text and int(text) >= 1:
+        return int(text)
+    raise RuntimeError("--workloads must be a positive integer or full")
+
+
 def plans(workloads, sample):
+    sample_size = workload_size(workloads)
     result = []
     for dataset in common.DATASETS:
-        choices = []
-        if workloads in ("sample", "all"):
-            choices.append(("N=100 sample", common.INPUT_DIR / ("speed-sample-" + dataset + ".tsv")))
-        if workloads in ("full", "all"):
-            choices.append(("All evaluation rows", common.INPUT_DIR / ("eval-" + dataset + ".tsv")))
-        for workload, path in choices:
-            if sample:
-                workload = "Code check: " + workload
-            items = []
-            for position, row in enumerate(common.read_tsv(path), start=1):
-                if sample and position > 3:
-                    break
+        rows = common.read_tsv(common.INPUT_DIR / ("eval-" + dataset + ".tsv"))
+        if sample_size is None:
+            workload = "All evaluation rows"
+            chosen = rows
+        else:
+            workload = "N=%d sample" % sample_size
+            by_text = {}
+            for row in rows:
                 text = row["input_key"]
-                if not text:
-                    raise RuntimeError("The fixed input contains an empty search string")
-                row_id = row.get("evaluation_row_id", dataset + "-sample-" + str(position))
-                items.append({"row_id": row_id, "input_key": text})
-            result.append((dataset, workload, items))
+                if text and text not in by_text:
+                    by_text[text] = row
+            if sample_size > len(by_text):
+                raise RuntimeError("%s has %d distinct strings, which is fewer than %d" % (
+                    dataset, len(by_text), sample_size))
+            chosen = []
+            for text in random.Random(20261021).sample(sorted(by_text), sample_size):
+                chosen.append(by_text[text])
+        if sample:
+            workload = "Code check: " + workload
+        items = []
+        for position, row in enumerate(chosen, start=1):
+            if sample and position > 3:
+                break
+            text = row["input_key"]
+            if not text:
+                raise RuntimeError("The fixed input contains an empty search string")
+            row_id = row.get("evaluation_row_id", dataset + "-sample-" + str(position))
+            items.append({"row_id": row_id, "input_key": text})
+        result.append((dataset, workload, items))
     return result
 
 
@@ -225,7 +247,8 @@ def estimate(schedule, repeats):
 
 def main():
     parser = argparse.ArgumentParser(description="Time single-string searches without warmups")
-    parser.add_argument("--workloads", choices=("sample", "full", "all"), default="sample")
+    parser.add_argument("--workloads", default="500",
+                        help="Positive integer (strings sampled per dataset) or full")
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--warmup-queries", type=int, choices=(0,), default=0)
     parser.add_argument("--sample", action="store_true", help="Code check only: three strings per dataset")
@@ -234,6 +257,7 @@ def main():
     args = parser.parse_args()
     if args.repeats < 1:
         raise RuntimeError("Repeats must be positive")
+    workload_size(args.workloads)
     schedule = plans(args.workloads, args.sample)
     prediction = estimate(schedule, args.repeats)
     print("Estimate:", json.dumps(prediction), flush=True)
@@ -243,14 +267,16 @@ def main():
         raise RuntimeError("Set PYTHONHASHSEED=0 before starting Python")
     if power_state() == "battery":
         raise RuntimeError("Connect the laptop power adapter before measuring")
-    with (common.PACKAGE_DIR / "records" / "environment-20261102.json").open(encoding="utf-8") as handle:
-        expected_inputs = json.load(handle)["input_hashes"]
-    if common.input_hashes() != expected_inputs:
-        raise RuntimeError("Run build_inputs.py to recreate the fixed benchmark inputs")
+    for dataset in common.DATASETS:
+        eval_path = common.INPUT_DIR / ("eval-" + dataset + ".tsv")
+        if not eval_path.is_file():
+            raise RuntimeError("Missing evaluation input: " + eval_path.name)
     assets = common.check_assets(False)
     asset_manifest = assets / "asset-manifest.json"
-    if not asset_manifest.exists():
+    if not asset_manifest.is_file():
         asset_manifest = common.PACKAGE_DIR / "records" / "required-assets.tsv"
+    if not asset_manifest.is_file():
+        raise RuntimeError("The asset manifest is missing")
     settings = {"protocol": "single-no-warmup-v1", "workloads": args.workloads,
                 "repeats": args.repeats, "sample": args.sample, "warmup_queries": 0,
                 "input_hashes": common.input_hashes(), "code_hashes": common.code_hashes(),
