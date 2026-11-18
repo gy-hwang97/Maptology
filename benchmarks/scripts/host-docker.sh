@@ -3,8 +3,13 @@
 
 host_build_image() {
   if [[ "${MAPTOLOGY_SKIP_IMAGE_BUILD:-0}" == "1" ]]; then
-    echo "Reusing image '$IMAGE_NAME' (already built in this run)."
-    return 0
+    local runtime
+    runtime="$(docker image inspect --format '{{ index .Config.Labels "maptology.graph_runtime" }}' "$IMAGE_NAME" 2>/dev/null || true)"
+    if [[ "$runtime" == "r-tidyverse" ]]; then
+      echo "Reusing image '$IMAGE_NAME' (already built in this run)."
+      return 0
+    fi
+    echo "Rebuilding image '$IMAGE_NAME' so the charts can be created inside the container."
   fi
 
   # Root .dockerignore excludes benchmarks/, so stage a small context that

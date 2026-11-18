@@ -116,18 +116,19 @@ if [[ "$ESTIMATE" -eq 0 && "$HAS_OUTPUT_PREFIX" -eq 0 ]]; then
   exit 2
 fi
 
+source "$SCRIPT_DIR/host-docker.sh"
+
 if [[ "$ESTIMATE" -eq 0 ]]; then
   RESULTS_TSV="$PAPER_DIR/results/${OUTPUT_PREFIX}.tsv"
   RESULTS_PDF="$PAPER_DIR/results/${OUTPUT_PREFIX}.pdf"
 
   write_speed_graph() {
     echo "Creating speed graph..."
-    (
-      cd "$PAPER_DIR"
-      Rscript code/create_figures.R --speed \
-        "results/${OUTPUT_PREFIX}.tsv" \
-        "results/${OUTPUT_PREFIX}.pdf"
-    )
+    host_build_image
+    host_run_container Rscript \
+      code/create_figures.R --speed \
+      "results/${OUTPUT_PREFIX}.tsv" \
+      "results/${OUTPUT_PREFIX}.pdf"
   }
 
   if [[ -f "$RESULTS_TSV" && -f "$RESULTS_PDF" ]]; then
@@ -145,13 +146,8 @@ if [[ "$ESTIMATE" -eq 0 ]]; then
   fi
 fi
 
-source "$SCRIPT_DIR/host-docker.sh"
 host_build_image
 if [[ "$WORKLOADS" == "full" ]]; then
   echo "A full speed run can take many hours because text2term searches one string at a time."
 fi
 host_run_container ./scripts/container-run-speed.sh "${DOCKER_ARGS[@]+"${DOCKER_ARGS[@]}"}"
-
-if [[ "$ESTIMATE" -eq 0 ]]; then
-  write_speed_graph
-fi

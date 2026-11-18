@@ -48,14 +48,17 @@ def main():
                 differences += 1
         results.append({"dataset": dataset, "check": "E12 single vs original E12", "inputs": count, "differences": differences})
         print(dataset, "E12 checked", count, "differences", differences, flush=True)
-        sample = common.read_tsv(common.INPUT_DIR / ("speed-sample-" + dataset + ".tsv"))
         differences = 0
         count = 0
-        for position, row in enumerate(sample):
-            if position >= args.api_queries:
-                break
+        seen = set()
+        for row in rows:
             text = row["input_key"]
-            row_id = "verify-" + str(position)
+            if not text or text in seen:
+                continue
+            if count >= args.api_queries:
+                break
+            seen.add(text)
+            row_id = "verify-" + str(count)
             prepared = searcher.search("T", text, row_id, e12, mapper)
             official = searcher.engines.t2t_map([text], [row_id])
             actual = searcher.signature("T", prepared, text, row_id)

@@ -29,8 +29,9 @@ Options:
                           N      = that many distinct strings per dataset
                           full   = every evaluation row
   --output-prefix NAME    Required unless --estimate.
-                          Writes results/NAME.tsv, results/NAME-rounds.tsv,
-                          results/NAME-setup.tsv, and raw/NAME.tsv.gz
+                          Writes results/NAME.tsv, results/NAME.pdf,
+                          results/NAME-rounds.tsv, results/NAME-setup.tsv,
+                          and raw/NAME.tsv.gz
   --repeats N             Default: 1
   --resume RUN_FOLDER     Resume an existing runs/... folder
 
@@ -147,4 +148,11 @@ if [[ -n "$NEW_RUN" && -d "$NEW_RUN" ]]; then
   echo "Run folder: $NEW_RUN"
 else
   echo "Warning: could not locate a run folder to export." >&2
+fi
+
+if [[ -f "results/${OUTPUT_PREFIX}.tsv" ]]; then
+  echo "Creating speed graph..."
+  Rscript code/create_figures.R --speed \
+    "results/${OUTPUT_PREFIX}.tsv" \
+    "results/${OUTPUT_PREFIX}.pdf"
 fi

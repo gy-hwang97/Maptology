@@ -3,7 +3,8 @@
 #   Set-Location benchmarks
 #   .\run-benchmarks_Win.ps1
 #
-# Requires Docker Desktop and Rscript. The container scripts must use Unix line endings.
+# Requires Docker Desktop. R and the tidyverse run inside the container.
+# The container scripts must use Unix line endings.
 
 $ErrorActionPreference = 'Stop'
 if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
@@ -49,8 +50,12 @@ function Initialize-BenchmarkDirectories {
 
 function Build-BenchmarkImage {
     if ($env:MAPTOLOGY_SKIP_IMAGE_BUILD -eq '1') {
-        Write-Host "Reusing image '$ImageName' (already built in this run)."
-        return
+        $runtime = docker image inspect --format '{{ index .Config.Labels "maptology.graph_runtime" }}' $ImageName 2>$null
+        if ($LASTEXITCODE -eq 0 -and $runtime -eq 'r-tidyverse') {
+            Write-Host "Reusing image '$ImageName' (already built in this run)."
+            return
+        }
+        Write-Host "Rebuilding image '$ImageName' so the charts can be created inside the container."
     }
 
     Write-Host "Staging build context for '$ImageName'..."
@@ -122,20 +127,6 @@ function Invoke-BenchmarkContainer {
     Invoke-Docker -Arguments $dockerArgs
 }
 
-function Invoke-FigureScript {
-    param([string[]]$Arguments)
-    Push-Location $BenchDir
-    try {
-        & Rscript @Arguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Rscript failed with exit code $LASTEXITCODE"
-        }
-    }
-    finally {
-        Pop-Location
-    }
-}
-
 if ($SpeedWorkloads -ne 'full' -and $SpeedWorkloads -notmatch '^[1-9][0-9]*$') {
     throw "SPEED_WORKLOADS must be a positive integer or full (got: $SpeedWorkloads)"
 }
@@ -154,7 +145,8 @@ elseif (Test-Path -LiteralPath $accuracyTsv) {
     Write-Host 'Accuracy benchmark will not be executed because the results already exist:'
     Write-Host "  $accuracyTsv"
     Write-Host 'Creating accuracy graph...'
-    Invoke-FigureScript @(
+    Build-BenchmarkImage
+    Invoke-BenchmarkContainer 'Rscript' @(
         'code/create_figures.R',
         "results/$AccuracyPrefix.tsv",
         "results/$AccuracyPrefix.pdf"
@@ -164,12 +156,6 @@ else {
     Build-BenchmarkImage
     Write-Host 'Accuracy scores every evaluation row for six methods (text2term is the slow part).'
     Invoke-BenchmarkContainer './scripts/container-run-accuracy.sh' @('--output-prefix', $AccuracyPrefix)
-    Write-Host 'Creating accuracy graph...'
-    Invoke-FigureScript @(
-        'code/create_figures.R',
-        "results/$AccuracyPrefix.tsv",
-        "results/$AccuracyPrefix.pdf"
-    )
 }
 
 $speedTsv = Join-Path $BenchDir "results\$SpeedPrefix.tsv"
@@ -184,7 +170,8 @@ if (Test-Path -LiteralPath $speedTsv) {
     Write-Host 'Speed benchmark will not be executed because the results already exist:'
     Write-Host "  $speedTsv"
     Write-Host 'Creating speed graph...'
-    Invoke-FigureScript @(
+    Build-BenchmarkImage
+    Invoke-BenchmarkContainer 'Rscript' @(
         'code/create_figures.R', '--speed',
         "results/$SpeedPrefix.tsv",
         "results/$SpeedPrefix.pdf"
@@ -201,10 +188,4 @@ Invoke-BenchmarkContainer './scripts/container-run-speed.sh' @(
     '--workloads', "$SpeedWorkloads",
     '--repeats', "$Repeats",
     '--output-prefix', $SpeedPrefix
-)
-Write-Host 'Creating speed graph...'
-Invoke-FigureScript @(
-    'code/create_figures.R', '--speed',
-    "results/$SpeedPrefix.tsv",
-    "results/$SpeedPrefix.pdf"
 )

@@ -3,7 +3,6 @@ import csv
 import hashlib
 import importlib.metadata
 import json
-import random
 import sys
 import urllib.request
 from datetime import datetime, timezone
@@ -11,8 +10,6 @@ from pathlib import Path
 
 import bioregistry
 import pandas as pd
-
-import benchmark_common as common
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -149,7 +146,6 @@ def main():
     report = {
         "status": "running",
         "source_commit": COMMIT,
-        "sample_seed": 20261021,
         "python": sys.version,
         "pandas": importlib.metadata.version("pandas"),
         "bioregistry": importlib.metadata.version("bioregistry"),
@@ -167,26 +163,20 @@ def main():
             distinct = set()
             for row in rows:
                 distinct.add(row["input_key"])
-            sample = random.Random(20261021).sample(sorted(distinct), common.SPEED_SAMPLE_SIZE)
-            sample_rows = []
-            for position, text in enumerate(sample, start=1):
-                sample_rows.append({"position": position, "input_key": text})
-            files = (("eval-" + dataset + ".tsv", COLUMNS, rows),
-                     ("speed-sample-" + dataset + ".tsv", ("position", "input_key"), sample_rows))
-            for name, columns, output in files:
-                temporary = run / name
-                write_table(temporary, columns, output)
-                digest = sha256(temporary)
-                if args.compare_dir:
-                    if sha256(args.compare_dir / name) != digest:
-                        raise RuntimeError("Local comparison failed: " + name)
-                report["outputs"][name] = {"sha256": digest, "rows": len(output)}
+            name = "eval-" + dataset + ".tsv"
+            temporary = run / name
+            write_table(temporary, COLUMNS, rows)
+            digest = sha256(temporary)
+            if args.compare_dir:
+                if sha256(args.compare_dir / name) != digest:
+                    raise RuntimeError("Local comparison failed: " + name)
+            report["outputs"][name] = {"sha256": digest, "rows": len(rows)}
             report["datasets"][dataset] = {
                 "url": url, "source_sha256": source_hash, "download": outcome,
                 "original_rows": original, "excluded": excluded, "selected_rows": len(rows),
                 "distinct_strings": len(distinct), "unresolved_reference_ids": unresolved,
             }
-            print(dataset, "source", original, "selected", len(rows), "sample", len(sample), flush=True)
+            print(dataset, "source", original, "selected", len(rows), "distinct", len(distinct), flush=True)
         for name in report["outputs"]:
             destination = args.output_dir / name
             payload = (run / name).read_bytes()

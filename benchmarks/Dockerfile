@@ -31,6 +31,14 @@ RUN pip install --no-cache-dir -r /tmp/requirements-docker.txt \
     && pip install --no-cache-dir --no-deps text2term==4.5.0 \
     && rm /tmp/requirements-docker.txt
 
+# Charts are created inside this image, so R and the tidyverse live here.
+LABEL maptology.graph_runtime="r-tidyverse"
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        r-base-core \
+        r-cran-tidyverse \
+    && rm -rf /var/lib/apt/lists/*
+
 # prepare_assets.py imports build/build_all_caches.py via ROOT.parent / "build"
 COPY build/ /app/build/
 COPY benchmarks/ /app/benchmarks/

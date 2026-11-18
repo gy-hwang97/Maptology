@@ -99,14 +99,15 @@ fi
 RESULTS_TSV="$PAPER_DIR/results/${OUTPUT_PREFIX}.tsv"
 RESULTS_PDF="$PAPER_DIR/results/${OUTPUT_PREFIX}.pdf"
 
+source "$SCRIPT_DIR/host-docker.sh"
+
 write_accuracy_graph() {
   echo "Creating accuracy graph..."
-  (
-    cd "$PAPER_DIR"
-    Rscript code/create_figures.R \
-      "results/${OUTPUT_PREFIX}.tsv" \
-      "results/${OUTPUT_PREFIX}.pdf"
-  )
+  host_build_image
+  host_run_container Rscript \
+    code/create_figures.R \
+    "results/${OUTPUT_PREFIX}.tsv" \
+    "results/${OUTPUT_PREFIX}.pdf"
 }
 
 if [[ -f "$RESULTS_TSV" && -f "$RESULTS_PDF" ]]; then
@@ -123,7 +124,6 @@ if [[ -f "$RESULTS_TSV" ]]; then
   exit 0
 fi
 
-source "$SCRIPT_DIR/host-docker.sh"
 host_build_image
 if [[ -n "$SAMPLE" ]]; then
   echo "Accuracy code check: $SAMPLE rows per dataset."
@@ -131,5 +131,3 @@ else
   echo "Accuracy scores every evaluation row for six methods (text2term is the slow part)."
 fi
 host_run_container ./scripts/container-run-accuracy.sh "${DOCKER_ARGS[@]+"${DOCKER_ARGS[@]}"}"
-
-write_accuracy_graph

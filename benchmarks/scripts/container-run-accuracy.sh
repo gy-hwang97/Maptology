@@ -21,9 +21,9 @@ Usage: container-run-accuracy.sh [options]
 Options:
   -h, --help              Show this help
   --output-prefix NAME    Required.
-                          Writes results/NAME.tsv (top-1 and top-5 summary)
-                          and raw/NAME.tsv.gz (one row per evaluation row
-                          and method)
+                          Writes results/NAME.tsv (top-1 and top-5 summary),
+                          results/NAME.pdf, and raw/NAME.tsv.gz (one row per
+                          evaluation row and method)
   --sample N              Score only N rows per dataset (code check)
 
 Inputs and assets are prepared automatically when missing or out of date.
@@ -113,4 +113,11 @@ if [[ -n "$NEW_RUN" && -d "$NEW_RUN" ]]; then
   echo "Run folder: $NEW_RUN"
 else
   echo "Warning: could not locate a run folder to export." >&2
+fi
+
+if [[ -f "results/${OUTPUT_PREFIX}.tsv" ]]; then
+  echo "Creating accuracy graph..."
+  Rscript code/create_figures.R \
+    "results/${OUTPUT_PREFIX}.tsv" \
+    "results/${OUTPUT_PREFIX}.pdf"
 fi
