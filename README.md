@@ -4,13 +4,13 @@
 
 People who create tabular data files (lab technicians, researchers, data analysts, and others) each tend to describe concepts in their own ways. Without the original creator to explain these choices, deciphering what a column or value actually represents can be slow and error prone. Maptology solves this by enabling data users to map each column name and categorical value to a matching term from an [ontology](https://en.wikipedia.org/wiki/Ontology_(information_science)), where every concept has a precise definition and a stable identifier. This shared vocabulary makes it possible to compare and combine datasets from different labs or studies, which improves data [interoperability](https://en.wikipedia.org/wiki/Interoperability).
 
-To illustrate, consider the scenario of a researcher studying gene-expression profiles in liver tumors. They might obtain phenotypic data from a local source, such as [electronic health records](https://en.wikipedia.org/wiki/Electronic_health_record), or from a public source, such as [Gene Expression Omnibus](http://www.ncbi.nlm.nih.gov/geo/). A common field to include in such a study is the subjects' biological sex assigned at birth. This information might be stored in a column named `Sex` or even something more generic like `characteristic_1`. The values in this column might include "F" and "M" or "Female" and "Male". A human examining these data might be able to infer what they mean based on intuition. However, assigning ontology terms would make the data more explicit and would avoid ambiguity. By mapping ontology term(s) to each column and unique value, it would become possible for both humans and computers to infer semantics. Rather than modifying the column name itself, which could cause confusion about [data provenance](https://en.wikipedia.org/wiki/Data_lineage#Data_provenance), we could provide a companion document that indicates the mappings. For example, we might use the [biological sex](http://purl.obolibrary.org/obo/PATO_0000047) term from the [Experimental Factor Ontology](https://en.wikipedia.org/wiki/Experimental_factor_ontology) (EFO) to describe the overall column and the [female](http://purl.obolibrary.org/obo/PATO_0000383) and [male](http://purl.obolibrary.org/obo/PATO_0000384) terms from EFO to describe the "F" and "M" values, respectively.
+To illustrate, consider the scenario of a researcher studying gene-expression profiles in liver tumors. They might obtain phenotypic data from a local source, such as [electronic health records](https://en.wikipedia.org/wiki/Electronic_health_record), or from a public source, such as [Gene Expression Omnibus](http://www.ncbi.nlm.nih.gov/geo/). A common field to include in such a study is the subjects' biological sex assigned at birth. This information might be stored in a column named `Sex` or even something more generic like `characteristic_1`. The values in this column might include "F" and "M" or "Female" and "Male". A human examining these data might be able to infer what they mean based on intuition. However, assigning ontology terms would make the data more explicit and would avoid ambiguity. By mapping ontology term(s) to each column and unique value, it would become possible for both humans and computers to infer semantics. Rather than modifying the column name itself, which could cause confusion about [data provenance](https://en.wikipedia.org/wiki/Data_lineage#Data_provenance), we could provide a companion document that indicates the mappings. For example, we might select the [Experimental Factor Ontology](https://en.wikipedia.org/wiki/Experimental_factor_ontology) (EFO) and search for [biological sex](http://purl.obolibrary.org/obo/PATO_0000047) to map the `Sex` column. If the data dictionary defines `F` as female and `M` as male, we can select `F`, search for [female](http://purl.obolibrary.org/obo/PATO_0000383), and click **Add**.
 
 Even if a dataset is *not* being shared with others, mapping the data to ontology terms is valuable because it benefits the original researchers and others on their team. Researchers inevitably revisit datasets months or years later, projects change hands, and analyses are combined across studies. Recording the intended meaning of columns and their values reduces ambiguity, improves reproducibility, and makes it easier to integrate data from multiple sources.
 
 The Maptology app enables researchers to import tabular data files, choose one or more ontologies, map column names and data values to terms within the selected ontologies, specify the basic data type (e.g., string, integer, float, date/time), and export this information as [LinkML](https://linkml.io) and/or [SSSOM](https://mapping-commons.github.io/sssom/dev) files. In doing so, it uses the [TF/IDF methodology](https://en.wikipedia.org/wiki/Tf%E2%80%93idf) to suggest mappings and enables the user to employ their domain expertise to accept or reject suggested mappings and perform custom searches. These searches are fast, even for large ontologies. No coding is required by the user. Additionally, Maptology supports the ability to map multiple ontology terms to a column name or data value. This is important because in many instances, a single ontology term is not descriptive enough on its own.
 
-Although other tools exist for mapping text to ontology terms (e.g., [text2term](https://github.com/rsgoncalves/text2term), [Zooma](https://www.ebi.ac.uk/spot/zooma/), [BioPortal Annotator](https://bioportal.bioontology.org/annotator)), these are designed for free text, while Maptology is designed specifically for tabular files which are ubiquitous in research.
+Although other tools exist for mapping text to ontology terms (e.g., [text2term](https://github.com/rsgoncalves/text2term), [Zooma](https://www.ebi.ac.uk/spot/zooma/), [BioPortal Annotator](https://bioportal.bioontology.org/annotator)), these are designed for free text, while Maptology is designed specifically for tabular files. It keeps each value mapping linked to its original column.
 
 ## How it works
 
@@ -24,7 +24,7 @@ Review the uploaded table to confirm it was read correctly.
 
 #### Step 3: Import Existing Mappings (Optional)
 
-If you already have a Maptology [LinkML](https://linkml.io) or [SSSOM](https://mapping-commons.github.io/sssom/dev) export, import it here to continue from those mappings. Only mappings that match the current data file are kept. You can skip this step.
+If you already have a Maptology [LinkML](https://linkml.io) or [SSSOM](https://mapping-commons.github.io/sssom/dev) export, import it here to continue from those mappings. Column mappings are kept when the column name matches. A value mapping is kept when the value occurs in the same column. You can skip this step.
 
 #### Step 4: Select Ontologies
 
@@ -126,7 +126,7 @@ before the Maptology app can be opened in a browser; later starts only fetch fil
 of date. If the ontologies on disk are ready to go, the page opens immediately and the BioPortal check continues in the background. While the app stays running, BioPortal is re-checked every 30 days and any changes are fetched
 automatically, so a long-running server needs no manual updates.
 
-What a full download costs, measured once from a clean machine:
+The download and index build times for the full collection are estimates based on a test of 126 ontologies:
 
 | | |
 |---|---|
@@ -144,7 +144,7 @@ Two things are worth knowing before you start a full download.
 
 **Building the indexes takes longer than downloading them** — about two and a half times as long in our measurements. The cost comes from the number of ontologies rather than their size, because each one carries a fixed start-up cost; the very large ones are only a couple of minutes apiece.
 
-Progress is echoed to the terminal, and the app opens once processing has finished. You can stop it at any point; Maptology runs with whatever it has already built and fetches the rest on demand. Later starts only fetch what
+Progress is echoed to the terminal, and the app opens once processing has finished. To download the remaining ontologies on demand, set MAPTOLOGY_DOWNLOAD_ALL=no and restart with the same cache folders. Later starts only fetch what
 changed. A few ontologies are available in formats that Maptology cannot read; those are skipped.
 
 Requests are spaced out to stay within BioPortal's published rate limit of 15 requests per second.
