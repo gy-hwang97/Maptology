@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+ #!/usr/bin/env bash
 
 # Build and run the accuracy benchmark in Docker.
 #

@@ -65,7 +65,7 @@ host_run_container() {
 
   # Code and scripts are mounted from the host so a skipped image rebuild
   # still runs the current benchmark files.
-  docker run --name "$CONTAINER_NAME" --rm \
+  docker run --name "$CONTAINER_NAME" -it --rm \
     --entrypoint "$entrypoint" \
     -e PYTHONDONTWRITEBYTECODE=1 \
     -e PYTHONHASHSEED=0 \
