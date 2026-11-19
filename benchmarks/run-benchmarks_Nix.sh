@@ -11,6 +11,16 @@ SPEED_WORKLOADS=500
 REPEATS=5
 SPEED_PREFIX=speed-test-${SPEED_WORKLOADS}-terms-$REPEATS-repeats
 
+# Delete outputs from an earlier run so the next run starts fresh.
+# rm -rf \
+#   "$SCRIPT_DIR/assets" \
+#   "$SCRIPT_DIR/inputs" \
+#   "$SCRIPT_DIR/raw" \
+#   "$SCRIPT_DIR/records" \
+#   "$SCRIPT_DIR/results" \
+#   "$SCRIPT_DIR/runs" \
+#   "$SCRIPT_DIR/sources"
+
 bash "$SCRIPT_DIR/scripts/host-run-accuracy.sh" \
   --output-prefix "$ACCURACY_PREFIX"
 

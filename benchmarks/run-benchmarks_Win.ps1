@@ -91,6 +91,38 @@ function Build-BenchmarkImage {
     }
 }
 
+function Get-ContainerUserSpec {
+    $idCommand = Get-Command id -ErrorAction SilentlyContinue
+    if (-not $idCommand) {
+        $gitId = Join-Path $env:ProgramFiles 'Git\usr\bin\id.exe'
+        if (Test-Path -LiteralPath $gitId) {
+            $idCommand = $gitId
+        }
+    }
+    $uid = $null
+    $gid = $null
+    $userName = $null
+    if ($idCommand) {
+        $uid = "$((& $idCommand -u).Trim())"
+        $gid = "$((& $idCommand -g).Trim())"
+        $userName = "$((& $idCommand -un).Trim())"
+    } elseif ($env:UID -match '^\d+$' -and $env:GID -match '^\d+$') {
+        $uid = $env:UID
+        $gid = $env:GID
+        $userName = $env:USERNAME
+    }
+    if ($uid -notmatch '^\d+$' -or $gid -notmatch '^\d+$') {
+        throw "Could not determine the current numeric user and group ids. Install Git for Windows, or set the UID and GID environment variables."
+    }
+    if (-not $userName) {
+        $userName = $env:USERNAME
+    }
+    return @{
+        Spec = "${uid}:${gid}"
+        Name = $userName
+    }
+}
+
 function Invoke-BenchmarkContainer {
     param(
         [Parameter(Mandatory = $true)][string]$Entrypoint,
@@ -108,12 +140,17 @@ function Invoke-BenchmarkContainer {
 
     Write-Host "Starting container '$ContainerName'..."
     Write-Host 'Persistent host dirs: inputs sources assets runs results raw'
+    $containerUser = Get-ContainerUserSpec
     $dockerArgs = @(
         'run', '--name', $ContainerName, '--rm',
+        '--user', $containerUser.Spec,
         '--entrypoint', $Entrypoint,
         '-e', 'PYTHONDONTWRITEBYTECODE=1',
         '-e', 'PYTHONHASHSEED=0',
         '-e', 'PYTHONUTF8=1',
+        '-e', 'HOME=/tmp',
+        '-e', 'USER', $containerUser.Name,
+        '-e', 'LOGNAME', $containerUser.Name,
         '-v', (Convert-ToDockerMount (Join-Path $BenchDir 'code') '/app/benchmarks/code' 'ro'),
         '-v', (Convert-ToDockerMount (Join-Path $BenchDir 'scripts') '/app/benchmarks/scripts' 'ro'),
         '-v', (Convert-ToDockerMount (Join-Path $BenchDir 'inputs') '/app/benchmarks/inputs'),

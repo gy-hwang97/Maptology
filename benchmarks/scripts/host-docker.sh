@@ -63,13 +63,24 @@ host_run_container() {
   echo "Starting container '$CONTAINER_NAME'..."
   echo "Persistent host dirs: inputs sources assets runs results raw"
 
+  # Run as the host user so files written to the mounted directories keep
+  # that user's ownership. HOME is a writable directory inside the container.
+  local host_uid host_gid host_user
+  host_uid="$(id -u)"
+  host_gid="$(id -g)"
+  host_user="$(id -un)"
+
   # Code and scripts are mounted from the host so a skipped image rebuild
   # still runs the current benchmark files.
   docker run --name "$CONTAINER_NAME" -it --rm \
+    --user "${host_uid}:${host_gid}" \
     --entrypoint "$entrypoint" \
     -e PYTHONDONTWRITEBYTECODE=1 \
     -e PYTHONHASHSEED=0 \
     -e PYTHONUTF8=1 \
+    -e HOME=/tmp \
+    -e USER="$host_user" \
+    -e LOGNAME="$host_user" \
     -v "$PAPER_DIR/code:/app/benchmarks/code:ro" \
     -v "$PAPER_DIR/scripts:/app/benchmarks/scripts:ro" \
     -v "$PAPER_DIR/inputs:/app/benchmarks/inputs" \
