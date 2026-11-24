@@ -16,10 +16,13 @@ SPEED_PREFIX=speed-test-${SPEED_WORKLOADS}-terms-$REPEATS-repeats
 #   "$SCRIPT_DIR/assets" \
 #   "$SCRIPT_DIR/inputs" \
 #   "$SCRIPT_DIR/raw" \
-#   "$SCRIPT_DIR/records" \
 #   "$SCRIPT_DIR/results" \
 #   "$SCRIPT_DIR/runs" \
 #   "$SCRIPT_DIR/sources"
+
+# for dir in assets inputs raw results runs sources; do
+#   rsync -avz kumiko.ls.byu.edu:/Analysis/Maptology/benchmarks/$dir .
+# done
 
 bash "$SCRIPT_DIR/scripts/host-run-accuracy.sh" \
   --output-prefix "$ACCURACY_PREFIX"
